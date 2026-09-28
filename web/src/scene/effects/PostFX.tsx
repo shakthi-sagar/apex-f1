@@ -1,0 +1,32 @@
+import { useFrame } from '@react-three/fiber'
+import { Bloom, BrightnessContrast, DepthOfField, EffectComposer, HueSaturation, N8AO, SMAA, ToneMapping, Vignette } from '@react-three/postprocessing'
+import { ToneMappingMode, type DepthOfFieldEffect } from 'postprocessing'
+import { useRef } from 'react'
+import { cameraState } from '../../camera/CameraRig'
+import { useUI } from '../../state/ui'
+
+export function PostFX() {
+  const quality = useUI((s) => s.quality)
+  const dof = useRef<DepthOfFieldEffect>(null)
+  useFrame(() => {
+    const d = dof.current
+    if (!d) return
+    const coc = d.cocMaterial as unknown as { worldFocusDistance: number; worldFocusRange: number }
+    const target = cameraState.focusDistance
+    coc.worldFocusDistance += (target - coc.worldFocusDistance) * 0.2
+    coc.worldFocusRange = Math.max(6, target * 0.35)
+    d.bokehScale = cameraState.dofAmount * (quality === 'ultra' ? 3.2 : 2.2)
+  })
+  return (
+    <EffectComposer multisampling={quality === 'balanced' ? 0 : 4} enableNormalPass={false}>
+      <N8AO aoRadius={2.2} distanceFalloff={1.2} intensity={quality === 'balanced' ? 1.6 : 2.2} quality={quality === 'ultra' ? 'high' : 'medium'} halfRes={quality !== 'ultra'} />
+      <DepthOfField ref={dof} worldFocusDistance={30} worldFocusRange={12} bokehScale={0} resolutionScale={0.5} />
+      <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.2} intensity={0.55} radius={0.7} />
+      <ToneMapping mode={ToneMappingMode.AGX} />
+      <HueSaturation saturation={0.14} />
+      <BrightnessContrast brightness={-0.01} contrast={0.12} />
+      <Vignette offset={0.28} darkness={0.55} />
+      {quality === 'balanced' ? <SMAA /> : <></>}
+    </EffectComposer>
+  )
+}

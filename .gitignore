@@ -1,0 +1,11 @@
+node_modules/
+dist/
+.cache/
+.venv/
+__pycache__/
+*.pyc
+out/
+.wrangler/
+.dev.vars
+*.env
+.env*

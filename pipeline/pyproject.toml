@@ -1,0 +1,19 @@
+[project]
+name = "f1sim-pipeline"
+version = "0.1.0"
+description = "FastF1 -> RaceBundle generation pipeline"
+requires-python = ">=3.11"
+dependencies = [
+  "fastf1>=3.8",
+  "numpy",
+  "scipy",
+  "pandas",
+  "requests",
+  "shapely>=2",
+  "boto3",
+  "pillow",
+  "mapbox-earcut",
+]
+
+[tool.setuptools.packages.find]
+include = ["f1sim*"]

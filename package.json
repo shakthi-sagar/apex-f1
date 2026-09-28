@@ -1,0 +1,11 @@
+{
+  "name": "f1-sim",
+  "private": true,
+  "workspaces": ["web", "worker"],
+  "scripts": {
+    "dev": "npm -w web run dev",
+    "build": "npm -w web run build",
+    "deploy": "npm -w web run build && npm -w worker run deploy",
+    "typecheck": "npm -w web run typecheck && npm -w worker run typecheck"
+  }
+}
