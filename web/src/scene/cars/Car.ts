@@ -18,6 +18,8 @@ export class Car {
   private liveryMat: THREE.MeshPhysicalMaterial
   private compound = -1
   private highlight: THREE.Mesh
+  private helmetMat: THREE.MeshPhysicalMaterial
+  private assetFlap: THREE.Object3D | null = null
   private highlightMat: THREE.MeshBasicMaterial
 
   constructor(driver: DriverInfo, season?: number) {
@@ -39,7 +41,7 @@ export class Car {
     add(G.carbon, M.carbon)
     add(G.dark, M.dark, this.body, false)
     add(G.halo, M.halo)
-    const helmetMat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(driver.livery.accent).lerp(new THREE.Color('#ffffff'), 0.25), roughness: 0.25, clearcoat: 1 })
+    const helmetMat = this.helmetMat = new THREE.MeshPhysicalMaterial({ color: new THREE.Color(driver.livery.accent).lerp(new THREE.Color('#ffffff'), 0.25), roughness: 0.25, clearcoat: 1 })
     add(G.helmet, helmetMat)
     add(G.visor, M.visor, this.body, false)
     // DRS flap pivots about its leading edge
@@ -122,7 +124,25 @@ export class Car {
   private async tryAsset(season: number) {
     const r = await loadCarModel(season, this.driver.teamId)
     if (!r) return
-    if (r.entry.hideProceduralBody !== false) this.body.children.forEach((c) => { if (c !== this.flap) c.visible = false })
+    const M = sharedMaterials()
+    if (r.entry.recolor) {
+      const roles: Record<string, THREE.Material> = {
+        livery: this.liveryMat, carbon: M.carbon, dark: M.dark, halo: M.halo, helmet: this.helmetMat, rainlight: this.rainMat, visor: M.visor,
+      }
+      r.object.traverse((o) => {
+        const m = o as THREE.Mesh
+        if (!m.isMesh) return
+        const role = (m.material as THREE.Material).name
+        if (roles[role]) m.material = roles[role]
+        m.castShadow = true
+        m.receiveShadow = true
+      })
+    }
+    this.assetFlap = r.object.getObjectByName('DRSFlap') ?? null
+    if (r.entry.hideProceduralBody !== false) {
+      // keep procedural number decals; hide the procedural bodywork (including its flap)
+      this.body.children.forEach((c) => { if (!(c as THREE.Mesh).isMesh || ((c as THREE.Mesh).geometry as THREE.BufferGeometry).type !== 'PlaneGeometry') c.visible = false })
+    }
     if (r.entry.hideProceduralWheels) [this.steerL, this.steerR, ...this.spins].forEach((w) => (w.visible = false))
     this.body.add(r.object)
   }
@@ -148,6 +168,7 @@ export class Car {
     this.steerR.rotation.y = p.steer
     for (const w of this.spins) w.rotation.z = -p.wheelSpin
     this.flap.rotation.z = p.drsOpen ? 0.55 : 0
+    if (this.assetFlap) this.assetFlap.rotation.z = p.drsOpen ? -0.45 : 0
     // FIA rain light blinks in wet conditions; brake doesn't drive the rain light in F1 but we
     // pulse it brighter under braking for readability.
     const blink = p.rainLight ? (Math.floor(t * 4) % 2 === 0 ? 1 : 0.15) : 0

@@ -9,6 +9,7 @@ import { dataUrl, fetchJson } from '../../data/fetch'
  *   assets/cars/{season}/index.json
  *   {
  *     "models": {
+ *       "default":         { "url": "f1-2024.glb", "recolor": true },          // shared, recoloured per team
  *       "red-bull-racing": { "url": "red-bull-racing.glb", "scale": 1, "rotationY": 0, "offset": [0, 0, 0],
  *                            "license": "CC-BY-4.0 …", "hideProceduralBody": true }
  *     }
@@ -26,6 +27,8 @@ export interface CarAssetEntry {
   license?: string
   hideProceduralBody?: boolean
   hideProceduralWheels?: boolean
+  /** material names are roles (livery, carbon, dark, halo, helmet, rainlight) recoloured per team */
+  recolor?: boolean
 }
 
 const indexCache = new Map<number, Promise<Record<string, CarAssetEntry>>>()
@@ -44,7 +47,8 @@ export function carAssetIndex(season: number) {
 
 export async function loadCarModel(season: number, teamId: string): Promise<{ object: THREE.Object3D; entry: CarAssetEntry } | null> {
   const idx = await carAssetIndex(season)
-  const entry = idx[teamId]
+  // a team-specific model wins; otherwise the season's shared model is recoloured per team
+  const entry = idx[teamId] ?? idx['default']
   if (!entry) return null
   const url = dataUrl(`assets/cars/${season}/${entry.url}`)
   let p = modelCache.get(url)

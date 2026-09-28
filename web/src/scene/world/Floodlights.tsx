@@ -2,6 +2,7 @@ import { useFrame } from '@react-three/fiber'
 import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { RaceRuntime } from '../../replay/runtime'
+import { instanced, loadInstanceParts } from '../assets'
 import { look } from '../atmosphere/Atmosphere'
 
 /**
@@ -22,32 +23,17 @@ export function Floodlights({ rt }: { rt: RaceRuntime }) {
         const i = Math.floor(s / c.ds) % c.n
         const d = side > 0 ? c.barrierLeft[i] + 2.2 : c.barrierRight[i] - 2.2
         c.frame(s, d, f)
-        pts.push({ x: f.x, y: f.y, z: f.z, yaw: Math.atan2(side * f.nz, side * f.nx) })
+        pts.push({ x: f.x, y: f.y, z: f.z, yaw: Math.atan2(-side * f.nz, side * f.nx) }) // +X away from the track (lamp arm is -X)
       }
     }
-    const pole = new THREE.CylinderGeometry(0.16, 0.24, 14, 6)
-    pole.translate(0, 7, 0)
-    const arm = new THREE.BoxGeometry(3.4, 0.25, 0.25)
-    arm.translate(-1.5, 13.6, 0)
-    const head = new THREE.BoxGeometry(1.8, 0.35, 0.9)
-    head.translate(-2.6, 13.3, 0)
-    const poleMat = new THREE.MeshStandardMaterial({ color: '#5a5f66', roughness: 0.5, metalness: 0.7 })
-    const headMat = new THREE.MeshStandardMaterial({ color: '#111', emissive: new THREE.Color('#fff4e0'), emissiveIntensity: 9, toneMapped: true })
-    const n = pts.length
-    const mk = (g: THREE.BufferGeometry, m: THREE.Material) => {
-      const im = new THREE.InstancedMesh(g, m, n)
-      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1)
-      pts.forEach((p, k) => {
-        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.yaw)
-        m4.compose(new THREE.Vector3(p.x, p.y, p.z), q, one)
-        im.setMatrixAt(k, m4)
-      })
-      im.instanceMatrix.needsUpdate = true
-      im.frustumCulled = false
-      return im
-    }
+    const mats = pts.map((p) => new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y, p.z),
+      new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), p.yaw), new THREE.Vector3(1, 1, 1)))
+    const headMat = new THREE.MeshStandardMaterial({ color: '#111', emissive: new THREE.Color('#fff4e0'), emissiveIntensity: 9 })
     const group = new THREE.Group()
-    group.add(mk(pole, poleMat), mk(arm, poleMat), mk(head, headMat))
+    // Blender pylon (assets/environment/floodlight.glb); lamp faces get the animated emissive material
+    loadInstanceParts('assets/environment/floodlight.glb').then((parts) => {
+      group.add(instanced(parts, mats, (part) => (part.name === 'ts_lamp' ? headMat : undefined)))
+    }).catch(() => {})
     return { group, headMat }
   }, [c, night])
   useFrame(() => {

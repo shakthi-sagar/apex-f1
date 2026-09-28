@@ -1,5 +1,6 @@
 import { useFrame } from '@react-three/fiber'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { loadGltf } from '../assets'
 import * as THREE from 'three'
 import { newFrame } from '../../data/circuit'
 import type { RaceRuntime } from '../../replay/runtime'
@@ -72,6 +73,23 @@ export function SafetyCar({ rt }: { rt: RaceRuntime }) {
     root.name = 'safety-car'
     return { root, lightA }
   }, [])
+  // swap in the Blender-authored safety car when available (procedural stays as fallback)
+  useEffect(() => {
+    let alive = true
+    loadGltf('assets/cars/2024/safety-car.glb').then((scene) => {
+      if (!alive) return
+      const model = scene.clone(true)
+      model.traverse((o) => {
+        const m = o as THREE.Mesh
+        if (!m.isMesh) return
+        m.castShadow = true
+        if ((m.material as THREE.Material).name === 'lightbar') m.material = obj.lightA
+      })
+      obj.root.children.forEach((c) => (c.visible = false))
+      obj.root.add(model)
+    }).catch(() => { /* keep procedural */ })
+    return () => { alive = false }
+  }, [obj])
   const f = useMemo(() => newFrame(), [])
   const state = useMemo(() => ({ s: 0, vis: 0 }), [])
 

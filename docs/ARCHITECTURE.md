@@ -126,7 +126,10 @@ Idempotent: the same inputs give the same bundle hash; bumping `PIPELINE_VERSION
   gravel bands); walls with generic ad panels; catch fences; pit lane, pit wall, garages; stands with crowd;
   OSM buildings (tiles, procedural facades, lit windows at night); instanced trees with wind; terrain splat;
   floodlights for night races; rain streaks and tyre spray; N8AO, bloom, DOF (long-lens shots), AgX, vignette.
-* Cars: original procedural 2022+-regulation model (lofted monocoque/sidepods, wing stacks, halo, lathed
+* Assets: original Blender models (`assets-src/apex_assets.blend`, built through the Blender MCP) — a 2024-spec
+  F1 car recoloured per team from role-named materials, a GT safety car, floodlight pylons, TV camera towers
+  (placed exactly at the trackside camera positions) and marshal posts, instanced from glb on R2.
+* Cars (fallback): original procedural 2022+-regulation model (lofted monocoque/sidepods, wing stacks, halo, lathed
   tyres), livery shader driven by team colour schemes (no trademarks), steering/rotating wheels, DRS flap,
   blinking FIA rain light, compound sidewall band. `assets/cars/{season}/{teamId}.glb` is the extension point for
   separately supplied, licensed models.

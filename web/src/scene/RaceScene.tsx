@@ -19,6 +19,7 @@ import { Terrain } from './world/Terrain'
 import { TerrainSampler } from './world/terrainSampler'
 import { Trees } from './world/Trees'
 import { Floodlights } from './world/Floodlights'
+import { TracksideProps } from './world/TracksideProps'
 import { useUI } from '../state/ui'
 
 function Driver({ rt }: { rt: RaceRuntime }) {
@@ -58,6 +59,7 @@ export function RaceScene({ rt }: { rt: RaceRuntime }) {
           <Buildings rt={rt} />
           <Trees rt={rt} />
           <Floodlights rt={rt} />
+          <TracksideProps rt={rt} terrain={terrain} />
           <Cars rt={rt} />
           <DuelScene rt={rt} />
           <SafetyCar rt={rt} />
