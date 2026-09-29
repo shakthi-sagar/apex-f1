@@ -136,6 +136,23 @@ export class SeasonJobs extends DurableObject<Env> {
     return { season, round }
   }
 
+  // ---- generator presence (used on the 'agents' instance): agents poll every ~10 s and
+  // heartbeat every 45 s while working, so "seen in the last 90 s" means online.
+  async agentSeen(name: string, busy: string | null): Promise<void> {
+    await this.ctx.storage.put(`agent:${name}`, { name, lastSeen: Date.now(), busy })
+  }
+
+  async agents(): Promise<{ name: string; lastSeen: number; busy: string | null }[]> {
+    const m = await this.ctx.storage.list<{ name: string; lastSeen: number; busy: string | null }>({ prefix: 'agent:' })
+    const now = Date.now()
+    const out = []
+    for (const [k, v] of m) {
+      if (now - v.lastSeen > 7 * 24 * 3600e3) await this.ctx.storage.delete(k) // forget long-gone agents
+      else out.push(v)
+    }
+    return out.sort((a, b) => b.lastSeen - a.lastSeen)
+  }
+
   async update(round: number, patch: Partial<Job>): Promise<void> {
     const cur = (await this.get(round)) ?? { state: 'unavailable', updatedAt: Date.now() }
     await this.ctx.storage.put(`r${round}`, { ...cur, ...patch, updatedAt: Date.now() })
@@ -215,9 +232,11 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (parts[1] === 'agent') {
     if (!env.AGENT_TOKEN || req.headers.get('authorization') !== `Bearer ${env.AGENT_TOKEN}`) return json({ error: 'unauthorized' }, 401)
     const url = new URL(req.url)
+    const presence = env.JOBS.get(env.JOBS.idFromName('agents'))
     if (parts[2] === 'next' && req.method === 'POST') {
       const seasons = (url.searchParams.get('seasons') || '2024').split(',').map(Number).filter(Boolean)
       const agent = (url.searchParams.get('agent') || 'agent').slice(0, 40)
+      await presence.agentSeen(agent, null)
       for (const season of seasons) {
         const job = await jobsFor(season).claim(season, agent)
         if (job) return json(job)
@@ -225,13 +244,35 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
       return json(null)
     }
     if (parts[2] === 'progress' && req.method === 'POST') {
-      const b = (await req.json()) as Partial<Job> & { season: number; round: number }
+      const b = (await req.json()) as Partial<Job> & { season: number; round: number; agent?: string }
+      const done = b.state === 'ready' || b.state === 'failed'
+      await presence.agentSeen((b.agent || 'agent').slice(0, 40), done ? null : `${b.season}/${b.round}`)
       await jobsFor(b.season).update(b.round, {
         state: b.state, stage: b.stage, progress: b.progress, message: b.message, error: b.error, manifest: b.manifest,
       })
       return json({ ok: true })
     }
     return json({ error: 'not found' }, 404)
+  }
+
+  // ---- generator status for the UI
+  if (parts[1] === 'generator' && req.method === 'GET') {
+    const agents = (await env.JOBS.get(env.JOBS.idFromName('agents')).agents()) as { name: string; lastSeen: number; busy: string | null }[]
+    const now = Date.now()
+    const live = agents.filter((a) => now - a.lastSeen < 90_000)
+    return json({
+      mode: env.GENERATOR_MODE,
+      online: env.GENERATOR_MODE === 'container' || live.length > 0,
+      agents: live.length,
+      busy: live.filter((a) => a.busy).map((a) => a.busy),
+      lastSeen: agents[0]?.lastSeen ?? null,
+    })
+  }
+
+  if (parts[1] === 'seasons' && req.method === 'GET') {
+    const list = await env.BUCKET.list({ prefix: `${env.R2_PREFIX}/catalog/` })
+    const seasons = list.objects.map((o) => Number(o.key.split('/').pop()!.replace('.json', ''))).filter(Boolean).sort((a, b) => b - a)
+    return json({ seasons }, 200, 'public, max-age=300')
   }
 
   if (parts[1] === 'catalog' && parts.length === 3) {

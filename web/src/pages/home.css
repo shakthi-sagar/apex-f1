@@ -75,3 +75,8 @@
   .races, .home-nav, .home-foot { padding-left: 20px; padding-right: 20px; }
   .races-head { flex-direction: column; align-items: start; }
 }
+.home-nav nav { display: flex; align-items: center; gap: 6px; }
+.home-nav nav .season { cursor: pointer; color: var(--dim); background: transparent; }
+.home-nav nav .season.on { color: var(--text); background: rgba(255,255,255,.08); }
+.status.queued { color: #ffb86b; }
+.warn { color: #ffb86b; font-weight: 700; }

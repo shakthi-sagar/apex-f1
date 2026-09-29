@@ -23,6 +23,7 @@ from .generate import generate
 from .storage import Store
 
 log = logging.getLogger("f1sim.agent")
+AGENT_NAME = f"{socket.gethostname()}-{os.getpid()}"
 
 
 class Reporter:
@@ -48,7 +49,7 @@ class Reporter:
         self._stop.set()
 
     def post(self, **fields):
-        body = {"season": self.season, "round": self.round, **fields}
+        body = {"season": self.season, "round": self.round, "agent": AGENT_NAME, **fields}
         try:
             requests.post(f"{self.api}/agent/progress", json=body, headers={"authorization": f"Bearer {self.token}"}, timeout=20)
         except requests.RequestException as e:  # keep generating even if a report is lost
@@ -65,12 +66,26 @@ class Reporter:
         self.post(**self.fields)
 
 
+def _seasons(api: str, fixed: str, cache: dict) -> str:
+    """Explicit --seasons, else every season with a published catalog (refreshed every 10 min)."""
+    if fixed:
+        return fixed
+    if time.time() - cache.get("at", 0) > 600:
+        try:
+            cache["v"] = ",".join(str(y) for y in requests.get(f"{api}/seasons", timeout=20).json()["seasons"]) or "2024"
+            cache["at"] = time.time()
+        except requests.RequestException as e:
+            log.warning("season list unavailable: %s", e)
+    return cache.get("v", "2024")
+
+
 def run(api: str, token: str, seasons: str, once: bool, cache_root: str):
-    name = f"{socket.gethostname()}-{os.getpid()}"
-    log.info("agent %s polling %s (seasons %s)", name, api, seasons)
+    name = AGENT_NAME
+    cache: dict = {}
+    log.info("agent %s polling %s (seasons %s)", name, api, seasons or "auto")
     while True:
         try:
-            r = requests.post(f"{api}/agent/next", params={"seasons": seasons, "agent": name},
+            r = requests.post(f"{api}/agent/next", params={"seasons": _seasons(api, seasons, cache), "agent": name},
                               headers={"authorization": f"Bearer {token}"}, timeout=30)
             r.raise_for_status()
             job = r.json()
@@ -97,7 +112,7 @@ def run(api: str, token: str, seasons: str, once: bool, cache_root: str):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--api", default=os.environ.get("F1SIM_API", "https://apex.shadster.dev/api"))
-    ap.add_argument("--seasons", default="2024")
+    ap.add_argument("--seasons", default="", help="comma list; default: every season with a catalog")
     ap.add_argument("--once", action="store_true", help="exit when the queue is empty")
     a = ap.parse_args()
     token = os.environ.get("F1SIM_AGENT_TOKEN")

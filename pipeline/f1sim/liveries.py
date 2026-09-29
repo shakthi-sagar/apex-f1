@@ -24,12 +24,23 @@ LIVERIES_2024 = {
 }
 
 
+# additional teams / names in other seasons (colour schemes only)
+EXTRA = {
+    "AlphaTauri": dict(primary="#1c2a4a", secondary="#f0f0f0", accent="#d71920", highlight="#ffffff", number="#ffffff", finish="satin"),
+    "Alfa Romeo": dict(primary="#8a0a0a", secondary="#f2f2f2", accent="#111111", highlight="#ffffff", number="#ffffff", finish="gloss"),
+    "Racing Bulls": dict(primary="#f2f2f2", secondary="#1634cb", accent="#e30613", highlight="#1a1a1a", number="#1634cb", finish="gloss"),
+    "Audi": dict(primary="#9da2a6", secondary="#121212", accent="#e2002b", highlight="#ffffff", number="#ffffff", finish="satin"),
+    "Cadillac": dict(primary="#121212", secondary="#f2f2f2", accent="#c8a24a", highlight="#ffffff", number="#ffffff", finish="gloss"),
+}
+ALL = {**LIVERIES_2024, **EXTRA}
+
+
 def team_id(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
 
 
 def livery(season: int, team: str, team_color: str) -> dict:
-    base = LIVERIES_2024.get(team) if season in (2023, 2024, 2025) else None
+    base = ALL.get(team)
     if base:
         return {**base, "teamColor": team_color}
     return dict(primary=team_color, secondary="#1a1a1a", accent="#ffffff", highlight="#ffffff", number="#ffffff",

@@ -241,3 +241,10 @@ a { color: inherit; text-decoration: none; }
 .ovl-sep { height: 1px; background: var(--line); margin: 4px 2px; }
 .help { position: absolute; right: calc(100% + 8px); top: 0; width: 260px; padding: 12px; display: grid; gap: 7px; font-size: 12px; }
 .help div { display: grid; grid-template-columns: 90px 1fr; align-items: center; color: var(--dim); }
+.gen-pill { display: inline-flex; align-items: center; gap: 7px; font-size: 11px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line-hi); margin-right: 8px; white-space: nowrap; }
+.gen-pill .gen-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dimmer); }
+.gen-pill.on { color: var(--green); border-color: rgba(57,255,136,.3); }
+.gen-pill.on .gen-dot { background: var(--green); box-shadow: 0 0 10px var(--green); animation: pulse 2s infinite; }
+.gen-pill.off { color: #ffb86b; border-color: rgba(255,184,107,.35); }
+.gen-pill.off .gen-dot { background: #ffb86b; }
+.gen-offline { display: flex; flex-direction: column; align-items: center; gap: 10px; margin-top: 18px; color: var(--dim); font-size: 13px; line-height: 1.5; }

@@ -35,12 +35,15 @@ export interface CarAssetEntry {
 const indexCache = new Map<number, Promise<Record<string, CarAssetEntry>>>()
 const modelCache = new Map<string, Promise<THREE.Object3D>>()
 
-export function carAssetIndex(season: number) {
+export function carAssetIndex(season: number): Promise<Record<string, CarAssetEntry>> {
   let p = indexCache.get(season)
   if (!p) {
+    // seasons without their own models fall back to the 2024 car (same ground-effect regulations era)
     p = fetchJson<{ models: Record<string, CarAssetEntry> }>(dataUrl(`assets/cars/${season}/index.json`))
       .then((j) => j.models ?? {})
-      .catch(() => ({}))
+      .catch((): Promise<Record<string, CarAssetEntry>> | Record<string, CarAssetEntry> => (season !== 2024
+        ? carAssetIndex(2024).then((m) => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, { ...v, url: `../2024/${v.url}` }])))
+        : {}))
     indexCache.set(season, p)
   }
   return p

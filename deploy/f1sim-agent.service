@@ -18,7 +18,7 @@ Environment=R2_PREFIX=f1-sim
 Environment=F1SIM_CACHE=%h/Projects/f1-sim/.cache
 Environment=F1SIM_API=https://apex.shadster.dev/api
 Environment=PYTHONUNBUFFERED=1
-ExecStart=%h/Projects/f1-sim/pipeline/.venv/bin/python -m f1sim.agent --seasons 2024
+ExecStart=%h/Projects/f1-sim/pipeline/.venv/bin/python -m f1sim.agent
 Restart=always
 RestartSec=15
 Nice=5

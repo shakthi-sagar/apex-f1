@@ -39,3 +39,21 @@ export async function loadManifest(season: number, round: number): Promise<Manif
     return null
   }
 }
+
+export interface GeneratorStatus { mode: 'agent' | 'container'; online: boolean; agents: number; busy: string[]; lastSeen: number | null }
+
+export async function getGenerator(): Promise<GeneratorStatus | null> {
+  try {
+    const r = await fetch(`${API_BASE}/generator`, { cache: 'no-store' })
+    if (r.ok) return (await r.json()) as GeneratorStatus
+  } catch { /* API unreachable */ }
+  return null
+}
+
+export async function getSeasons(): Promise<number[]> {
+  try {
+    const r = await fetch(`${API_BASE}/seasons`)
+    if (r.ok) return ((await r.json()) as { seasons: number[] }).seasons
+  } catch { /* fall through */ }
+  return [2024]
+}

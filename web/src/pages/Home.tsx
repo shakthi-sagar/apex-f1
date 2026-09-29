@@ -1,17 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getCatalog, getStatuses, loadManifest } from '../data/api'
+import { getCatalog, getSeasons, getStatuses, loadManifest } from '../data/api'
+import { useGenerator } from '../lib/useGenerator'
+import { GeneratorPill } from '../ui/GeneratorPill'
 import type { CatalogRace, RaceStatus } from '../data/types'
 import { navigate } from '../lib/router'
 import { Logo } from '../ui/Screens'
 import './home.css'
 
-const SEASONS = [2024]
 const FEATURED = { season: 2024, round: 21 }
 
 type StatusMap = Record<number, RaceStatus | undefined>
 
 export function Home() {
-  const [season] = useState(SEASONS[0])
+  const [seasons, setSeasons] = useState<number[]>([2024])
+  const [season, setSeason] = useState(() => Number(new URLSearchParams(location.search).get('season')) || 2024)
+  const [featuredCat, setFeaturedCat] = useState<CatalogRace[]>([])
+  const gen = useGenerator()
+  useEffect(() => { getSeasons().then(setSeasons); getCatalog(FEATURED.season).then(setFeaturedCat).catch(() => {}) }, [])
+  const pickSeason = (y: number) => {
+    setSeason(y); setRaces(null); setStatus({})
+    history.replaceState(null, '', `?season=${y}`)
+  }
   const [races, setRaces] = useState<CatalogRace[] | null>(null)
   const [status, setStatus] = useState<StatusMap>({})
   const [err, setErr] = useState<string | null>(null)
@@ -34,7 +43,7 @@ export function Home() {
     return () => { alive = false; clearInterval(id) }
   }, [season])
 
-  const featured = useMemo(() => races?.find((r) => r.round === FEATURED.round), [races])
+  const featured = useMemo(() => featuredCat.find((r) => r.round === FEATURED.round), [featuredCat])
   const open = (r: { season: number; round: number }) => navigate(`/race/${r.season}/${r.round}`)
 
   return (
@@ -42,7 +51,10 @@ export function Home() {
       <header className="home-nav">
         <div className="home-brand"><Logo size={34} /><span>APEX</span><em>Race Replays</em></div>
         <nav>
-          <span className="season on">{season} SEASON</span>
+          <GeneratorPill g={gen} />
+          {seasons.map((y) => (
+            <button key={y} className={`season ${y === season ? 'on' : ''}`} onClick={() => pickSeason(y)}>{y}</button>
+          ))}
         </nav>
       </header>
 
@@ -80,12 +92,15 @@ export function Home() {
       <section className="races" id="races">
         <div className="races-head">
           <h2>{season} Season</h2>
-          <p>Races marked <span className="dot ready" /> are ready to watch instantly. Others are generated on first request — once, then cached for everyone.</p>
+          <p>
+            Races marked <span className="dot ready" /> are ready to watch instantly. Others are generated on first request — once, then cached for everyone.
+            {gen && !gen.online && <><br /><b className="warn">The generator is offline right now</b> — new requests are queued and start automatically when it’s back.</>}
+          </p>
         </div>
         {err && <p className="dim">Couldn’t load the calendar: {err}</p>}
         <div className="grid">
           {(races ?? Array.from({ length: 12 }, () => null)).map((r, i) =>
-            r ? <RaceCard key={r.round} r={r} st={status[r.round]} onOpen={() => open(r)} /> : <div key={i} className="card skeleton" />,
+            r ? <RaceCard key={r.round} r={r} st={status[r.round]} genOnline={gen?.online ?? true} onOpen={() => open(r)} /> : <div key={i} className="card skeleton" />,
           )}
         </div>
       </section>
@@ -98,14 +113,14 @@ export function Home() {
   )
 }
 
-function RaceCard({ r, st, onOpen }: { r: CatalogRace; st?: RaceStatus; onOpen: () => void }) {
+function RaceCard({ r, st, genOnline, onOpen }: { r: CatalogRace; st?: RaceStatus; genOnline: boolean; onOpen: () => void }) {
   const state = st?.state ?? 'unavailable'
   const ready = state === 'ready'
   const busy = !ready && state !== 'unavailable' && state !== 'failed'
   const color = r.winner?.color ?? '#888'
   const date = new Date(r.date + 'T12:00:00Z').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
   return (
-    <button className={`card ${ready ? 'is-ready' : ''}`} onClick={onOpen} disabled={r.unavailable} style={{ ['--team' as string]: color }}>
+    <button className={`card ${ready ? 'is-ready' : ''}`} onClick={onOpen} disabled={r.unavailable} style={{ ['--team' as string]: color }} title={r.unavailable ? 'Race not run yet / no data' : undefined}>
       <div className="card-top">
         <span className="rnd">R{String(r.round).padStart(2, '0')}</span>
         <span className="date">{date}</span>
@@ -131,9 +146,11 @@ function RaceCard({ r, st, onOpen }: { r: CatalogRace; st?: RaceStatus; onOpen: 
       </div>
       <div className="card-foot">
         {ready && <span className="status ready"><span className="dot ready" />Ready to watch</span>}
-        {busy && <span className="status busy"><span className="spinner" />Generating{st?.progress != null ? ` · ${Math.round(((stageIndex(state) + (st.progress ?? 0)) / 6) * 100)}%` : ''}</span>}
+        {busy && !genOnline && <span className="status queued">Queued · waiting for generator</span>}
+        {busy && genOnline && <span className="status busy"><span className="spinner" />Generating{st?.progress != null ? ` · ${Math.round(((stageIndex(state) + (st.progress ?? 0)) / 6) * 100)}%` : ''}</span>}
         {state === 'failed' && <span className="status failed">Generation failed · retry</span>}
-        {state === 'unavailable' && <span className="status">Generate replay →</span>}
+        {state === 'unavailable' && (genOnline ? <span className="status">Generate replay →</span>
+          : <span className="status queued" title="The generator is offline; your request will be queued">Queue replay (generator offline)</span>)}
       </div>
     </button>
   )
