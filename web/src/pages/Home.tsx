@@ -52,9 +52,6 @@ export function Home() {
         <div className="home-brand"><Logo size={34} /><span>APEX</span><em>Race Replays</em></div>
         <nav>
           <GeneratorPill g={gen} />
-          {seasons.map((y) => (
-            <button key={y} className={`season ${y === season ? 'on' : ''}`} onClick={() => pickSeason(y)}>{y}</button>
-          ))}
         </nav>
       </header>
 
@@ -90,6 +87,13 @@ export function Home() {
       </section>
 
       <section className="races" id="races">
+        <div className="season-tabs" role="tablist" aria-label="Season">
+          {seasons.map((y) => (
+            <button key={y} role="tab" aria-selected={y === season} className={`season-tab ${y === season ? 'on' : ''}`} onClick={() => pickSeason(y)}>
+              {y}
+            </button>
+          ))}
+        </div>
         <div className="races-head">
           <h2>{season} Season</h2>
           <p>

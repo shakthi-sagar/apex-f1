@@ -31,7 +31,7 @@
 .hero-tag .s { color: var(--accent2); font-size: 13px; font-weight: 700; margin-top: 2px; }
 
 .races { max-width: 1480px; margin: 0 auto; padding: 30px 48px 80px; }
-.races-head { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 26px; border-top: 1px solid var(--line); padding-top: 36px; }
+.races-head { display: flex; align-items: end; justify-content: space-between; gap: 30px; margin-bottom: 26px; padding-top: 28px; }
 .races-head h2 { font-size: 34px; margin: 0; font-weight: 900; }
 .races-head p { color: var(--dim); max-width: 520px; margin: 0; font-size: 14px; line-height: 1.5; }
 .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--dimmer); margin: 0 4px; }
@@ -76,7 +76,11 @@
   .races-head { flex-direction: column; align-items: start; }
 }
 .home-nav nav { display: flex; align-items: center; gap: 6px; }
-.home-nav nav .season { cursor: pointer; color: var(--dim); background: transparent; }
-.home-nav nav .season.on { color: var(--text); background: rgba(255,255,255,.08); }
 .status.queued { color: #ffb86b; }
 .warn { color: #ffb86b; font-weight: 700; }
+
+.season-tabs { display: flex; gap: 4px; padding-top: 20px; border-bottom: 1px solid var(--line); }
+.season-tab { position: relative; padding: 12px 22px 14px; font-size: 15px; font-weight: 900; letter-spacing: .06em; color: var(--dim); cursor: pointer; transition: color .2s; }
+.season-tab:hover { color: var(--text); }
+.season-tab.on { color: var(--text); }
+.season-tab.on::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0; background: var(--accent); box-shadow: 0 0 14px var(--accent); }
