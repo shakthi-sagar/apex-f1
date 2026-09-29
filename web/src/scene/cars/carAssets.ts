@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { dataUrl, fetchJson } from '../../data/fetch'
 
 /**
@@ -73,4 +74,58 @@ export async function loadCarModel(season: number, teamId: string): Promise<{ ob
   } catch {
     return null
   }
+}
+
+/** A car model flattened for rendering: one merged geometry per material role (few draw calls). */
+export interface CarParts {
+  entry: CarAssetEntry
+  roles: { role: string; geometry: THREE.BufferGeometry }[]
+  flap: { geometry: THREE.BufferGeometry; position: THREE.Vector3; quaternion: THREE.Quaternion } | null
+}
+
+const partsCache = new Map<string, Promise<CarParts | null>>()
+
+export function loadCarParts(season: number, teamId: string): Promise<CarParts | null> {
+  const key = `${season}/${teamId}`
+  let p = partsCache.get(key)
+  if (!p) {
+    p = (async () => {
+      const r = await loadCarModel(season, teamId)
+      if (!r) return null
+      const root = r.object
+      root.updateMatrixWorld(true)
+      const byRole = new Map<string, THREE.BufferGeometry[]>()
+      let flap: CarParts['flap'] = null
+      const clean = (g: THREE.BufferGeometry) => {
+        for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k)
+        if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2))
+        return g.index ? g.toNonIndexed() : g
+      }
+      const flapNode = root.getObjectByName('DRSFlap')
+      root.traverse((o) => {
+        const m = o as THREE.Mesh
+        if (!m.isMesh) return
+        const role = (m.material as THREE.Material).name
+        // meshes under the flap node are kept in the flap's local frame (it pivots)
+        let inFlap = false
+        for (let q: THREE.Object3D | null = m; q; q = q.parent) if (q === flapNode) inFlap = true
+        if (inFlap && flapNode) {
+          const local = new THREE.Matrix4().copy(flapNode.matrixWorld).invert().multiply(m.matrixWorld)
+          const g = clean(m.geometry.clone().applyMatrix4(local))
+          flap = { geometry: g, position: new THREE.Vector3(), quaternion: new THREE.Quaternion() }
+          flapNode.matrixWorld.decompose(flap.position, flap.quaternion, new THREE.Vector3())
+          return
+        }
+        const g = clean(m.geometry.clone().applyMatrix4(m.matrixWorld)) // includes the entry's scale/rotation/offset
+        const arr = byRole.get(role) ?? []
+        arr.push(g)
+        byRole.set(role, arr)
+      })
+      const roles = [...byRole.entries()].map(([role, gs]) => ({ role, geometry: mergeGeometries(gs, false)! }))
+      roles.forEach((r) => r.geometry.computeBoundingSphere())
+      return { entry: r.entry, roles, flap } as CarParts
+    })()
+    partsCache.set(key, p)
+  }
+  return p
 }

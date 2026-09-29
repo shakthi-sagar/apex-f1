@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { memo, useMemo, useRef, useState } from 'react'
+import type { RaceEvent } from '../data/types'
 import { useClockTime } from '../lib/useClock'
 import type { RaceRuntime } from '../replay/runtime'
 import { fmtClock } from '../replay/raceQueries'
@@ -53,11 +54,7 @@ export function Transport({ rt }: { rt: RaceRuntime }) {
         }}
         onPointerLeave={() => setHover(null)}
       >
-        {keyEvents.map((e) => (
-          <div key={e.id} className="ev" style={{ left: `${pct(e.t)}%` }} onPointerDown={(ev) => { ev.stopPropagation(); c.seek(e.t - 6, true) }}>
-            <i style={{ background: EVENT_COLORS[e.type], opacity: 0.4 + e.importance * 0.6 }} />
-          </div>
-        ))}
+        <Markers events={keyEvents} start={c.start} span={span} onSeek={(tt) => c.seek(tt, true)} />
         <div className="track">
           {statusSpans.map((x, i) => (
             <div key={i} className="status" style={{ left: `${pct(Math.max(x.a, c.start))}%`, width: `${pct(x.b) - pct(Math.max(x.a, c.start))}%`, background: STATUS_COL[x.s] }} />
@@ -84,3 +81,16 @@ export function Transport({ rt }: { rt: RaceRuntime }) {
 }
 
 function THREE_clamp(x: number) { return Math.max(0, Math.min(1, x)) }
+
+/** Event ticks never change during playback: render once. */
+const Markers = memo(function Markers({ events, start, span, onSeek }: { events: RaceEvent[]; start: number; span: number; onSeek: (t: number) => void }) {
+  return (
+    <>
+      {events.map((e) => (
+        <div key={e.id} className="ev" style={{ left: `${((e.t - start) / span) * 100}%` }} onPointerDown={(ev) => { ev.stopPropagation(); onSeek(e.t - 6) }}>
+          <i style={{ background: EVENT_COLORS[e.type], opacity: 0.4 + e.importance * 0.6 }} />
+        </div>
+      ))}
+    </>
+  )
+}, (a, b) => a.events === b.events && a.start === b.start && a.span === b.span)

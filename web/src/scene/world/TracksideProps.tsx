@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { tracksideCameras } from '../../camera/shots'
 import type { RaceRuntime } from '../../replay/runtime'
 import { instanced, loadInstanceParts } from '../assets'
+import { freeze } from '../static'
 import type { TerrainSampler } from './terrainSampler'
 
 /**
@@ -42,6 +43,7 @@ export function TracksideProps({ rt, terrain }: { rt: RaceRuntime; terrain: Terr
       .then(([tp, mp]) => {
         if (!alive) return
         group.add(instanced(tp, towers), instanced(mp, posts))
+        freeze(group)
       }).catch(() => {})
     return () => { alive = false; group.clear() }
   }, [c, terrain, group])

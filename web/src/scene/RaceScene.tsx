@@ -1,4 +1,5 @@
 import { Canvas, useFrame } from '@react-three/fiber'
+import { PerformanceMonitor } from '@react-three/drei'
 import { Suspense, useMemo, useState } from 'react'
 import * as THREE from 'three'
 import type { RaceRuntime } from '../replay/runtime'
@@ -29,6 +30,7 @@ function Driver({ rt }: { rt: RaceRuntime }) {
     else rt.update(Math.min(dt, 0.1))
     ;(window as unknown as { __f1cam: unknown }).__f1cam = state.camera
     ;(window as unknown as { __f1scene: unknown }).__f1scene = state.scene
+    ;(window as unknown as { __f1gl: unknown }).__f1gl = state.gl
   }, -100)
   return null
 }
@@ -37,11 +39,14 @@ export function RaceScene({ rt }: { rt: RaceRuntime }) {
   const terrain = useMemo(() => new TerrainSampler(rt.data.world), [rt])
   const [labelLayer, setLabelLayer] = useState<HTMLDivElement | null>(null)
   const quality = useUI((s) => s.quality)
+  // adaptive resolution: start modest on hi-dpi screens, step down/up with measured frame rate
+  const cap = quality === 'ultra' ? 2 : quality === 'high' ? 1.5 : 1
+  const [dpr, setDpr] = useState(() => Math.min(window.devicePixelRatio || 1, 1.25, cap))
   return (
     <div className="scene-root">
       <Canvas
         shadows="soft"
-        dpr={quality === 'ultra' ? [1, 2] : [1, 1.5]}
+        dpr={Math.min(dpr, cap)}
         gl={{ antialias: false, powerPreference: 'high-performance', stencil: false, logarithmicDepthBuffer: false }}
         camera={{ fov: 50, near: 0.25, far: 30000, position: [0, 100, 100] }}
         onCreated={({ gl }) => {
@@ -51,6 +56,16 @@ export function RaceScene({ rt }: { rt: RaceRuntime }) {
         }}
       >
         <Driver rt={rt} />
+        <PerformanceMonitor
+          bounds={() => [45, 58]}
+          flipflops={4}
+          onDecline={() => setDpr((d) => {
+            if (d <= 0.76) { if (useUI.getState().quality !== 'balanced') useUI.getState().setQuality('balanced'); return d }
+            return Math.max(0.75, +(d - 0.25).toFixed(2))
+          })}
+          onIncline={() => setDpr((d) => Math.min(cap, +(d + 0.25).toFixed(2)))}
+          onFallback={() => { setDpr(0.75); useUI.getState().setQuality('balanced') }}
+        />
         <Suspense fallback={null}>
           <Atmosphere rt={rt} />
           <Terrain rt={rt} sampler={terrain} />

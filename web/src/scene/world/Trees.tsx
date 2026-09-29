@@ -1,22 +1,23 @@
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import type { RaceRuntime } from '../../replay/runtime'
 import { look } from '../atmosphere/Atmosphere'
+import { freeze } from '../static'
 
 /** Volumetric canopy: many jittered icosphere lobes around an ellipsoid shell (seeded). */
-function canopyTree(seed: number, height: number, crownR: number, crownH: number, lobes: number): THREE.BufferGeometry {
+function canopyTree(seed: number, height: number, crownR: number, crownH: number, lobes: number, detail = 1): THREE.BufferGeometry {
   let r = seed
   const rnd = () => { r = (r * 16807) % 2147483647; return (r - 1) / 2147483646 }
   const parts: THREE.BufferGeometry[] = []
   const trunkH = height - crownH * 0.75
-  const trunk = new THREE.CylinderGeometry(0.14, 0.26, trunkH + 0.6, 7)
+  const trunk = new THREE.CylinderGeometry(0.14, 0.26, trunkH + 0.6, detail ? 7 : 4)
   trunk.translate(0, (trunkH + 0.6) / 2, 0)
   colorize(trunk, 0x4b3a2c)
   parts.push(trunk)
   // a couple of branches
-  for (let k = 0; k < 3; k++) {
+  for (let k = 0; k < (detail ? 3 : 0); k++) {
     const a = rnd() * Math.PI * 2
     const br = new THREE.CylinderGeometry(0.05, 0.1, crownR * 0.9, 5)
     br.translate(0, crownR * 0.45, 0)
@@ -34,7 +35,7 @@ function canopyTree(seed: number, height: number, crownR: number, crownH: number
     const rr = Math.sqrt(1 - u * u)
     const x = Math.cos(th) * rr * crownR * 0.7, z = Math.sin(th) * rr * crownR * 0.7, y = cy + (up - 0.4) * crownH * 0.7
     const size = crownR * (0.38 + rnd() * 0.3)
-    const lobe = new THREE.IcosahedronGeometry(size, 1)
+    const lobe = new THREE.IcosahedronGeometry(size * (detail ? 1 : 1.35), detail)
     const p = lobe.attributes.position as THREE.BufferAttribute
     for (let i = 0; i < p.count; i++) {
       const j = 0.85 + rnd() * 0.3
@@ -115,10 +116,18 @@ function colorize(g: THREE.BufferGeometry, hex: number, jitter = false) {
   g.setAttribute('color', new THREE.BufferAttribute(col, 3))
 }
 
+const TILE = 320
+const NEAR = 260 // full-detail radius (m)
+const FAR = 3200 // beyond this trees are dropped
+
+/**
+ * Trees in spatial tiles (so frustum culling works) with two LODs per tile: full canopies near the
+ * camera (these alone cast shadows), light 3-lobe proxies further out.
+ */
 export function Trees({ rt }: { rt: RaceRuntime }) {
   const trees = rt.data.world.get<Float32Array>('trees')
   const tropical = /tropical|subtropical/.test(rt.circuit.meta.theme.biome)
-  const { meshes, mat } = useMemo(() => {
+  const { group, tiles, mat } = useMemo(() => {
     const n = trees.length / 5
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 })
     const u = { uTime: { value: 0 }, uWind: { value: 1 }, uDark: { value: 1 } }
@@ -126,9 +135,6 @@ export function Trees({ rt }: { rt: RaceRuntime }) {
       Object.assign(sh.uniforms, u)
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uWind;')
-      sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform float uDark;')
-        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= uDark;')
         .replace('#include <begin_vertex>', `#include <begin_vertex>
 {
   vec4 ip = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
@@ -138,49 +144,81 @@ export function Trees({ rt }: { rt: RaceRuntime }) {
   transformed.x += sway * hf * hf * 3.0 * uWind;
   transformed.z += sway * 0.6 * hf * hf * 2.0 * uWind;
 }`)
+      sh.fragmentShader = sh.fragmentShader
+        .replace('#include <common>', '#include <common>\nuniform float uDark;')
+        .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb *= uDark;')
     }
-    mat.customProgramCacheKey = () => 'trees-v2'
+    mat.customProgramCacheKey = () => 'trees-v3'
     ;(mat.userData as { u: typeof u }).u = u
-    const geos = [broadleaf(), tropical ? palm() : conifer(), tallTree()]
-    const buckets: number[][] = [[], [], []]
+    const hi = [broadleaf(), tropical ? palm() : conifer(), tallTree()]
+    const lo = [canopyTree(12345, 7.5, 3.2, 4.6, 3, 0), tropical ? palm() : conifer(), canopyTree(777, 11, 2.6, 6.5, 3, 0)]
+    // bucket by tile and species
+    const buckets = new Map<string, { cx: number; cz: number; ids: number[][] }>()
     for (let i = 0; i < n; i++) {
-      const sp = trees[i * 5 + 4]
-      buckets[sp === 1 ? (tropical ? 0 : 1) : sp === 2 ? (tropical ? 1 : 2) : 0].push(i)
+      const x = trees[i * 5], z = -trees[i * 5 + 1], sp = trees[i * 5 + 4]
+      const k = sp === 1 ? (tropical ? 0 : 1) : sp === 2 ? (tropical ? 1 : 2) : 0
+      const key = `${Math.floor(x / TILE)},${Math.floor(z / TILE)}`
+      let b = buckets.get(key)
+      if (!b) buckets.set(key, (b = { cx: (Math.floor(x / TILE) + 0.5) * TILE, cz: (Math.floor(z / TILE) + 0.5) * TILE, ids: [[], [], []] }))
+      b.ids[k].push(i)
     }
     const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3()
-    const col = new THREE.Color()
-    const meshes = buckets.map((ids, k) => {
-      const im = new THREE.InstancedMesh(geos[k], mat, Math.max(1, ids.length))
-      im.count = ids.length
-      ids.forEach((i, j) => {
-        const x = trees[i * 5], y = trees[i * 5 + 1], z = trees[i * 5 + 2], sc = trees[i * 5 + 3]
-        const r = Math.sin(i * 12.9898) * 43758.5453
-        const rnd = r - Math.floor(r)
-        q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), rnd * Math.PI * 2)
-        const size = sc * (0.85 + rnd * 0.5) * (k === 1 && tropical ? 1.2 : 1)
-        s.set(size, size * (0.9 + rnd * 0.3), size)
-        p.set(x, z - 0.2, -y)
-        m4.compose(p, q, s)
-        im.setMatrixAt(j, m4)
-        col.setHSL(0.24 + rnd * 0.07, 0.35 + rnd * 0.2, 0.42 + rnd * 0.2)
-        im.setColorAt(j, col.clone().multiplyScalar(1.9))
+    const col = new THREE.Color(), up = new THREE.Vector3(0, 1, 0)
+    const group = new THREE.Group()
+    group.name = 'trees'
+    const tiles: { center: THREE.Vector3; hi: THREE.InstancedMesh[]; lo: THREE.InstancedMesh[] }[] = []
+    for (const b of buckets.values()) {
+      const t = { center: new THREE.Vector3(b.cx, 0, b.cz), hi: [] as THREE.InstancedMesh[], lo: [] as THREE.InstancedMesh[] }
+      b.ids.forEach((ids, k) => {
+        if (!ids.length) return
+        for (const [lod, geo] of [['hi', hi[k]], ['lo', lo[k]]] as const) {
+          const im = new THREE.InstancedMesh(geo, mat, ids.length)
+          ids.forEach((i, j) => {
+            const x = trees[i * 5], y = trees[i * 5 + 1], z = trees[i * 5 + 2], sc = trees[i * 5 + 3]
+            const r = Math.sin(i * 12.9898) * 43758.5453
+            const rnd = r - Math.floor(r)
+            q.setFromAxisAngle(up, rnd * Math.PI * 2)
+            const size = sc * (0.85 + rnd * 0.5) * (k === 1 && tropical ? 1.2 : 1)
+            s.set(size, size * (0.9 + rnd * 0.3), size)
+            p.set(x, z - 0.2, -y)
+            im.setMatrixAt(j, m4.compose(p, q, s))
+            col.setHSL(0.24 + rnd * 0.07, 0.35 + rnd * 0.2, 0.42 + rnd * 0.2)
+            im.setColorAt(j, col.multiplyScalar(1.9))
+          })
+          im.computeBoundingSphere()
+          im.castShadow = lod === 'hi'
+          im.receiveShadow = lod === 'hi'
+          im.matrixAutoUpdate = false
+          im.visible = false
+          t[lod].push(im)
+          group.add(im)
+        }
       })
-      im.instanceMatrix.needsUpdate = true
-      if (im.instanceColor) im.instanceColor.needsUpdate = true
-      im.castShadow = true
-      im.receiveShadow = true
-      im.frustumCulled = false
-      im.name = 'trees'
-      return im
-    })
-    return { meshes, mat }
+      tiles.push(t)
+    }
+    freeze(group)
+    return { group, tiles, mat }
   }, [trees, tropical])
-  useEffect(() => () => { meshes.forEach((m) => { m.geometry.dispose(); m.dispose() }); mat.dispose() }, [meshes, mat])
+  useEffect(() => () => {
+    group.children.forEach((m) => (m as THREE.InstancedMesh).dispose())
+    mat.dispose()
+  }, [group, mat])
+  const lastLod = useRef(-1)
   useFrame((state) => {
     const u = (mat.userData as { u: { uTime: { value: number }; uWind: { value: number }; uDark: { value: number } } }).u
     u.uDark.value += ((look.night ? 0.3 : 1) - u.uDark.value) * 0.1
     u.uTime.value = state.clock.elapsedTime
     u.uWind.value = 0.6 + Math.min(2, (rt.weather?.windSpeed ?? 1)) * 0.5
+    // LOD selection 5x per second (camera moves smoothly; per-frame work is unnecessary)
+    if (state.clock.elapsedTime - lastLod.current < 0.2) return
+    lastLod.current = state.clock.elapsedTime
+    const cam = state.camera.position
+    for (const t of tiles) {
+      const d = Math.hypot(t.center.x - cam.x, t.center.z - cam.z) - TILE * 0.7
+      const near = d < NEAR, far = d < FAR
+      for (const m of t.hi) m.visible = near
+      for (const m of t.lo) m.visible = !near && far
+    }
   })
-  return <>{meshes.map((m, i) => <primitive key={i} object={m} />)}</>
+  return <primitive object={group} />
 }

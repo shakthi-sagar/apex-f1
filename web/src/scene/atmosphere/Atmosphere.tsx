@@ -35,6 +35,7 @@ export function Atmosphere({ rt }: { rt: RaceRuntime }) {
   const target = useMemo(() => new THREE.Object3D(), [])
   const night = env.night || env.theme.night
   const timeOfDay = useUI((s) => s.timeOfDayOverride)
+  const quality = useUI((s) => s.quality)
 
   // environment map: rendered from the sky dome once (and when the weather changes a lot)
   const envRT = useRef<THREE.WebGLRenderTarget | null>(null)
@@ -134,17 +135,18 @@ export function Atmosphere({ rt }: { rt: RaceRuntime }) {
       <mesh geometry={useMemo(() => new THREE.SphereGeometry(15000, 48, 24), [])} material={skyMat} frustumCulled={false} renderOrder={-10} />
       <primitive object={target} />
       <directionalLight
+        key={quality}
         ref={sun}
         castShadow
-        shadow-mapSize={[4096, 4096]}
+        shadow-mapSize={quality === 'ultra' ? [4096, 4096] : [2048, 2048]}
         shadow-bias={-0.0002}
         shadow-normalBias={0.04}
         shadow-camera-near={10}
         shadow-camera-far={1400}
-        shadow-camera-left={-140}
-        shadow-camera-right={140}
-        shadow-camera-top={140}
-        shadow-camera-bottom={-140}
+        shadow-camera-left={-110}
+        shadow-camera-right={110}
+        shadow-camera-top={110}
+        shadow-camera-bottom={-110}
       />
       <hemisphereLight ref={hemi} args={['#cfdcea', '#5a5448', 1]} />
     </>

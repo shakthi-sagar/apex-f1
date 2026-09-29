@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import type { RaceRuntime } from '../../replay/runtime'
 import { look } from '../atmosphere/Atmosphere'
+import { freeze } from '../static'
 import { NOISE_GLSL } from '../shaders/noise'
 
 const TILE = 700 // metres per culling tile
@@ -108,6 +109,7 @@ export function Buildings({ rt }: { rt: RaceRuntime }) {
       mesh.castShadow = true
       mesh.receiveShadow = true
       mesh.name = 'buildings'
+      freeze(mesh)
       meshes.push(mesh)
     }
     return { meshes, material: mat }

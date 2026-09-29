@@ -7,6 +7,8 @@ import type { TerrainSampler } from '../world/terrainSampler'
 import { asphaltMaterial, fenceMaterial, kerbMaterial, runoffMaterial, trackUniforms, wallMaterial } from './materials'
 import { ranges, ribbon } from './trackGeometry'
 import { look } from '../atmosphere/Atmosphere'
+import { freeze } from '../static'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { roofMaterial } from '../shaders/roof'
 
 function pitOffsetFn(c: CircuitModel) {
@@ -75,8 +77,9 @@ export function Track({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSample
       }))
     }
     if (kerbGeo.length) {
-      for (const kg of kerbGeo) {
-        const mesh = new THREE.Mesh(kg, kerbMaterial())
+      const merged = mergeGeometries(kerbGeo, false)
+      if (merged) {
+        const mesh = new THREE.Mesh(merged, kerbMaterial())
         mesh.receiveShadow = true
         g.add(mesh)
       }
@@ -242,7 +245,7 @@ export function Track({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSample
 
     // ------------------------------------------------------------------ start gantry
     g.add(startGantry(c))
-    return g
+    return freeze(g)
   }, [c, terrain, theme, street])
 
   useEffect(() => () => {

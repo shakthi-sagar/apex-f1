@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useClockTime } from '../lib/useClock'
+import { useClockSelect } from '../lib/useClock'
 import type { RaceRuntime } from '../replay/runtime'
 import { useUI } from '../state/ui'
 import { EVENT_COLORS, FILTER_GROUPS } from './eventStyle'
@@ -19,14 +19,16 @@ export function SidePanel({ rt }: { rt: RaceRuntime }) {
 }
 
 function Events({ rt }: { rt: RaceRuntime }) {
-  const t = useClockTime(rt.clock)
   const [on, setOn] = useState<Set<string>>(() => new Set(['key', 'passes', 'pits', 'flags']))
   const list = useMemo(() => {
     const types = new Set(FILTER_GROUPS.filter((g) => on.has(g.key)).flatMap((g) => g.types))
     return rt.events.filter((e) => types.has(e.type))
   }, [rt, on])
   const box = useRef<HTMLDivElement>(null)
-  const nowIdx = list.findIndex((e) => e.t > t)
+  // re-render only when the playhead crosses an event (not 15x a second)
+  const nowIdx = useClockSelect(rt.clock, (tt) => list.findIndex((e) => e.t > tt))
+  const pastIdx = useClockSelect(rt.clock, (tt) => list.findIndex((e) => e.t >= tt - 10))
+  const t = pastIdx < 0 ? Infinity : list[pastIdx].t + 10 - 1e-3
   useEffect(() => {
     const el = box.current?.querySelector('.evitem.now') as HTMLElement | null
     if (el && box.current) box.current.scrollTo({ top: el.offsetTop - 80, behavior: 'smooth' })

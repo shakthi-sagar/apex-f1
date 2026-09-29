@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { RaceRuntime } from '../../replay/runtime'
 import { instanced, loadInstanceParts } from '../assets'
+import { freeze } from '../static'
 import { look } from '../atmosphere/Atmosphere'
 
 /**
@@ -33,6 +34,7 @@ export function Floodlights({ rt }: { rt: RaceRuntime }) {
     // Blender pylon (assets/environment/floodlight.glb); lamp faces get the animated emissive material
     loadInstanceParts('assets/environment/floodlight.glb').then((parts) => {
       group.add(instanced(parts, mats, (part) => (part.name === 'ts_lamp' ? headMat : undefined)))
+      freeze(group)
     }).catch(() => {})
     return { group, headMat }
   }, [c, night])

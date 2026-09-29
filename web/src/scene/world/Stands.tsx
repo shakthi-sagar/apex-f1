@@ -4,6 +4,7 @@ import type { RaceRuntime } from '../../replay/runtime'
 import { NOISE_GLSL } from '../shaders/noise'
 import { ribbon } from '../track/trackGeometry'
 import { roofMaterial } from '../shaders/roof'
+import { freeze } from '../static'
 import type { TerrainSampler } from './terrainSampler'
 
 /**
@@ -48,7 +49,7 @@ export function Stands({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSampl
       rm.castShadow = true
       g.add(rm)
     }
-    return g
+    return freeze(g)
   }, [c, terrain])
   return <primitive object={group} />
 }

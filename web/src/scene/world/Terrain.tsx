@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import type { RaceRuntime } from '../../replay/runtime'
 import { look } from '../atmosphere/Atmosphere'
+import { freeze } from '../static'
 import { NOISE_GLSL } from '../shaders/noise'
 import type { TerrainSampler } from './terrainSampler'
 
@@ -167,7 +168,7 @@ totalEmissiveRadiance += diffuseColor.rgb * tFlood;`)
   })
   return (
     <>
-      <mesh geometry={geometry} material={material} receiveShadow name="terrain" />
+      <mesh geometry={geometry} material={material} receiveShadow name="terrain" ref={(m) => { if (m) freeze(m) }} />
       <primitive object={skirt} />
     </>
   )
