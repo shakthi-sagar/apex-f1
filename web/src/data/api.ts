@@ -10,12 +10,13 @@ export async function getCatalog(season: number): Promise<CatalogRace[]> {
   return c.races
 }
 
-export async function getStatuses(season: number): Promise<Record<number, RaceStatus>> {
+/** Status of every round; null means the API itself is unreachable (not "nothing generated"). */
+export async function getStatuses(season: number): Promise<Record<number, RaceStatus> | null> {
   try {
-    const r = await fetch(`${API_BASE}/races/${season}`)
+    const r = await fetch(`${API_BASE}/races/${season}`, { cache: 'no-store' })
     if (r.ok) return (await r.json()) as Record<number, RaceStatus>
   } catch { /* offline/dev without worker */ }
-  return {}
+  return null
 }
 
 export async function getStatus(season: number, round: number): Promise<RaceStatus | null> {

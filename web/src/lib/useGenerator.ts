@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { getGenerator, type GeneratorStatus } from '../data/api'
 
 /** Polls the generator presence endpoint (agents heartbeat into the Worker). */
-export function useGenerator(intervalMs = 15000) {
+export function useGenerator(intervalMs = 30000) {
   const [g, setG] = useState<GeneratorStatus | null | undefined>(undefined)
   useEffect(() => {
     let alive = true
-    const tick = () => getGenerator().then((x) => alive && setG(x))
+    const tick = () => { if (!document.hidden) getGenerator().then((x) => alive && setG(x)) }
     tick()
     const id = setInterval(tick, intervalMs)
     return () => { alive = false; clearInterval(id) }

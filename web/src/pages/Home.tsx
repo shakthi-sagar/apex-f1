@@ -32,20 +32,34 @@ export function Home() {
     setRaces(null)
     setStatus({})
     setErr(null)
-    getCatalog(season).then((r) => alive && setRaces(r)).catch((e) => alive && setErr(String(e)))
+    const catalog = getCatalog(season)
+    catalog.then((r) => alive && setRaces(r)).catch((e) => alive && setErr(String(e)))
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let probed = false
     const refresh = async () => {
-      let st: StatusMap = await getStatuses(season)
-      if (!Object.keys(st).length) {
-        // no API (static hosting / dev): probe published manifests directly
-        const cat = await getCatalog(season).catch(() => [] as CatalogRace[])
+      if (document.hidden) return schedule(60_000)
+      const api = await getStatuses(season)
+      let st: StatusMap
+      if (api) st = api
+      else {
+        // no API (static hosting / local dev): probe published manifests once, not on every tick
+        if (probed) return schedule(60_000)
+        probed = true
+        const cat = await catalog.catch(() => [] as CatalogRace[])
         const entries = await Promise.all(cat.map(async (r) => [r.round, (await loadManifest(season, r.round)) ? { state: 'ready' } : { state: 'unavailable' }] as const))
         st = Object.fromEntries(entries) as StatusMap
       }
-      if (alive) setStatus(st)
+      if (!alive) return
+      setStatus(st)
+      // poll quickly only while something is actually being generated
+      const active = Object.values(st).some((x) => x && x.state !== 'ready' && x.state !== 'failed' && x.state !== 'unavailable')
+      schedule(active ? 10_000 : 60_000)
     }
+    const schedule = (ms: number) => { if (alive) timer = setTimeout(refresh, ms) }
+    const onVisible = () => { if (!document.hidden) { clearTimeout(timer); refresh() } }
+    document.addEventListener('visibilitychange', onVisible)
     refresh()
-    const id = setInterval(refresh, 8000)
-    return () => { alive = false; clearInterval(id) }
+    return () => { alive = false; clearTimeout(timer); document.removeEventListener('visibilitychange', onVisible) }
   }, [season])
 
   const featured = useMemo(() => featuredCat.find((r) => r.round === FEATURED.round), [featuredCat])
