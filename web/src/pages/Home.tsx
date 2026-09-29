@@ -18,7 +18,8 @@ export function Home() {
   const gen = useGenerator()
   useEffect(() => { getSeasons().then(setSeasons); getCatalog(FEATURED.season).then(setFeaturedCat).catch(() => {}) }, [])
   const pickSeason = (y: number) => {
-    setSeason(y); setRaces(null); setStatus({})
+    if (y === season) return
+    setSeason(y)
     history.replaceState(null, '', `?season=${y}`)
   }
   const [races, setRaces] = useState<CatalogRace[] | null>(null)
@@ -27,6 +28,10 @@ export function Home() {
 
   useEffect(() => {
     let alive = true
+    // reset + load in the same effect so the grid can never be left in the loading state
+    setRaces(null)
+    setStatus({})
+    setErr(null)
     getCatalog(season).then((r) => alive && setRaces(r)).catch((e) => alive && setErr(String(e)))
     const refresh = async () => {
       let st: StatusMap = await getStatuses(season)

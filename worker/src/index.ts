@@ -272,7 +272,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (parts[1] === 'seasons' && req.method === 'GET') {
     const list = await env.BUCKET.list({ prefix: `${env.R2_PREFIX}/catalog/` })
     const seasons = list.objects.map((o) => Number(o.key.split('/').pop()!.replace('.json', ''))).filter(Boolean).sort((a, b) => b - a)
-    return json({ seasons }, 200, 'public, max-age=300')
+    return json({ seasons }, 200, 'public, max-age=30')
   }
 
   if (parts[1] === 'catalog' && parts.length === 3) {
