@@ -59,6 +59,7 @@ def fetch_area(lat: float, lon: float, radius_m: int, cache_dir: str, remote_get
     import math
 
     seen, elements = set(), []
+    missing: list = []
 
     def add(data):
         for el in data.get("elements", []):
@@ -67,8 +68,12 @@ def fetch_area(lat: float, lon: float, radius_m: int, cache_dir: str, remote_get
                 seen.add(key)
                 elements.append(el)
 
-    add(fetch(f'[out:json][timeout:120];(way["highway"="raceway"](around:{radius_m + 500},{lat:.6f},{lon:.6f}););out geom qt;',
-              cache_dir, remote_get, remote_put))
+    try:
+        add(fetch(f'[out:json][timeout:120];(way["highway"="raceway"](around:{radius_m + 500},{lat:.6f},{lon:.6f}););out geom qt;',
+                  cache_dir, remote_get, remote_put))
+    except RuntimeError as e:  # registration falls back to anchors/defaults
+        log.warning("raceway query failed (%s); continuing without it", e)
+        missing.append("raceway")
     dlat = radius_m / 111_320.0
     dlon = radius_m / (111_320.0 * math.cos(math.radians(lat)))
     s0, w0 = lat - dlat, lon - dlon
@@ -76,9 +81,12 @@ def fetch_area(lat: float, lon: float, radius_m: int, cache_dir: str, remote_get
     def tile(bb, group, depth):
         try:
             add(fetch(_tile_queries(bb, group), cache_dir, remote_get, remote_put, attempts=2 if depth < 2 else 6))
-        except RuntimeError:
+        except RuntimeError as e:
             if depth >= 2:
-                raise
+                # OSM is enrichment only: never fail a race over it — build with partial scenery
+                log.warning("OSM tile %s (%s) unavailable after retries (%s); skipping", bb, group, e)
+                missing.append((bb, group))
+                return
             s_, w_, n_, e_ = bb
             ms, mw = (s_ + n_) / 2, (w_ + e_) / 2
             log.info("splitting OSM tile %s (%s)", bb, group)
@@ -90,7 +98,9 @@ def fetch_area(lat: float, lon: float, radius_m: int, cache_dir: str, remote_get
             bb = (s0 + 2 * dlat * i / tiles, w0 + 2 * dlon * j / tiles, s0 + 2 * dlat * (i + 1) / tiles, w0 + 2 * dlon * (j + 1) / tiles)
             for group in ("building", "other"):
                 tile(bb, group, 0)
-    return {"elements": elements}
+    if missing:
+        log.warning("OSM coverage incomplete: %d tile(s) skipped", len(missing))
+    return {"elements": elements, "incomplete": bool(missing)}
 
 
 def query_hash(q: str) -> str:
