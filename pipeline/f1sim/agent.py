@@ -13,6 +13,7 @@ import argparse
 import logging
 import os
 import socket
+import threading
 import time
 import traceback
 
@@ -25,10 +26,26 @@ log = logging.getLogger("f1sim.agent")
 
 
 class Reporter:
+    """Streams progress to the Worker, plus a heartbeat so long stages (e.g. slow Overpass retries)
+    are never mistaken for an abandoned job and re-claimed by another agent."""
+
+    HEARTBEAT_S = 45
+
     def __init__(self, api: str, token: str, season: int, rnd: int):
         self.api, self.token, self.season, self.round = api, token, season, rnd
         self.last = 0.0
         self.stage = None
+        self.fields: dict = {}
+        self._stop = threading.Event()
+        threading.Thread(target=self._beat, daemon=True).start()
+
+    def _beat(self):
+        while not self._stop.wait(self.HEARTBEAT_S):
+            if self.fields:
+                self.post(**self.fields)
+
+    def close(self):
+        self._stop.set()
 
     def post(self, **fields):
         body = {"season": self.season, "round": self.round, **fields}
@@ -44,7 +61,8 @@ class Reporter:
             return
         self.last = now
         self.stage = stage
-        self.post(state=stage, stage=stage, progress=round(frac, 3), message=msg)
+        self.fields = dict(state=stage, stage=stage, progress=round(frac, 3), message=msg)
+        self.post(**self.fields)
 
 
 def run(api: str, token: str, seasons: str, once: bool, cache_root: str):
@@ -69,6 +87,8 @@ def run(api: str, token: str, seasons: str, once: bool, cache_root: str):
             except Exception as e:  # noqa: BLE001
                 log.error("job failed: %s", traceback.format_exc())
                 rep.post(state="failed", stage="failed", message="Generation failed", error=f"{type(e).__name__}: {e}")
+            finally:
+                rep.close()
         elif once:
             return
         time.sleep(3 if job else 10)

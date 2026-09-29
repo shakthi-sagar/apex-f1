@@ -128,7 +128,7 @@ export class SeasonJobs extends DurableObject<Env> {
     const all = await this.all()
     const now = Date.now()
     const cand = Object.entries(all)
-      .filter(([, j]) => j.state === 'queued' || (ACTIVE.includes(j.state) && now - j.updatedAt > 3 * 60 * 1000))
+      .filter(([, j]) => j.state === 'queued' || (ACTIVE.includes(j.state) && now - j.updatedAt > 10 * 60 * 1000)) // agents heartbeat every 45 s
       .sort((a, b) => (a[1].startedAt ?? 0) - (b[1].startedAt ?? 0))[0]
     if (!cand) return null
     const round = Number(cand[0])
