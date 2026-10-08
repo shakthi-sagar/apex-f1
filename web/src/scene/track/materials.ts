@@ -69,9 +69,9 @@ float paintMask; float wetMask;`)
   float skid = smoothstep(0.75, 0.95, fbm3(vec2(s * 0.15, d * 2.0))) * exp(-pow((d - vRL) / 2.0, 2.0));
   base *= 1.0 - skid * 0.15 * (1.0 - wetMask);
   // edge lines (white, ~20 cm) just inside the edges
-  float lw = 0.2;
-  float eL = smoothstep(lw + 0.02, lw, abs(d - (vL - 0.15))) ;
-  float eR = smoothstep(lw + 0.02, lw, abs(d - (vR + 0.15)));
+  float lw = 0.22;
+  float eL = smoothstep(lw + 0.025, lw, abs(d - (vL - 0.18)));
+  float eR = smoothstep(lw + 0.025, lw, abs(d - (vR + 0.18)));
   paintMask = max(eL, eR);
   // start / finish line (s = 0)
   float sw = min(abs(s), abs(s - uLength));

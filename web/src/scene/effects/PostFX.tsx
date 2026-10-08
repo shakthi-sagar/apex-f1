@@ -21,11 +21,11 @@ export function PostFX() {
     // light path: no AO / DOF, cheap AA
     return (
       <EffectComposer multisampling={0} enableNormalPass={false}>
-        <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.2} intensity={0.45} radius={0.6} />
+        <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.2} intensity={0.5} radius={0.65} />
         <ToneMapping mode={ToneMappingMode.AGX} />
-        <HueSaturation saturation={0.18} />
-        <BrightnessContrast brightness={-0.01} contrast={0.18} />
-        <Vignette offset={0.26} darkness={0.6} />
+        <HueSaturation saturation={0.22} />
+        <BrightnessContrast brightness={0.0} contrast={0.22} />
+        <Vignette offset={0.24} darkness={0.65} />
         <SMAA />
       </EffectComposer>
     )
@@ -34,11 +34,11 @@ export function PostFX() {
     <EffectComposer multisampling={4} enableNormalPass={false}>
       <N8AO aoRadius={2.2} distanceFalloff={1.2} intensity={2.2} quality={quality === 'ultra' ? 'high' : 'performance'} halfRes={quality !== 'ultra'} />
       <DepthOfField ref={dof} worldFocusDistance={30} worldFocusRange={12} bokehScale={0} resolutionScale={0.5} />
-      <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.2} intensity={0.55} radius={0.7} />
+      <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.2} intensity={0.6} radius={0.75} />
       <ToneMapping mode={ToneMappingMode.AGX} />
-      <HueSaturation saturation={0.18} />
-      <BrightnessContrast brightness={-0.01} contrast={0.18} />
-      <Vignette offset={0.26} darkness={0.6} />
+      <HueSaturation saturation={0.22} />
+      <BrightnessContrast brightness={0.0} contrast={0.22} />
+      <Vignette offset={0.24} darkness={0.65} />
     </EffectComposer>
   )
 }

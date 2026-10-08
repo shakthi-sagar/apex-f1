@@ -42,14 +42,14 @@ export function tracksideCameras(c: CircuitModel, heightAt: (x: number, z: numbe
   for (const k of c.meta.corners) {
     const i = Math.floor(k.s / c.ds) % c.n
     const outside = c.curvature[i] > 0 ? -1 : 1
-    place(k.s + 25, outside, 14 * OFF, 16 * H, 'corner', `T${k.label}`)
+    place(k.s + 25, outside, 22 * OFF, 20 * H, 'corner', `T${k.label}`)
   }
   // straights: every ~350 m where no corner camera is close
   for (let s = 0; s < c.length; s += 350) {
     if (cams.some((x) => Math.abs(x.s - s) < 160)) continue
-    place(s, ((s / 350) | 0) % 2 ? 1 : -1, 10 * OFF, 14 * H, 'straight', 'Straight')
+    place(s, ((s / 350) | 0) % 2 ? 1 : -1, 15 * OFF, 18 * H, 'straight', 'Straight')
   }
-  place(40, c.meta.pit.side === 'left' ? -1 : 1, 10, 14, 'start', 'Start/Finish')
+  place(40, c.meta.pit.side === 'left' ? -1 : 1, 15, 18, 'start', 'Start/Finish')
   return cams.sort((a, b) => a.s - b.s)
 }
 

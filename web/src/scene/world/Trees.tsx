@@ -129,7 +129,7 @@ export function Trees({ rt }: { rt: RaceRuntime }) {
   const tropical = /tropical|subtropical/.test(rt.circuit.meta.theme.biome)
   const { group, tiles, mat } = useMemo(() => {
     const n = trees.length / 5
-    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, metalness: 0 })
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0 })
     const u = { uTime: { value: 0 }, uWind: { value: 1 }, uDark: { value: 1 } }
     mat.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, u)
@@ -139,10 +139,10 @@ export function Trees({ rt }: { rt: RaceRuntime }) {
 {
   vec4 ip = instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0);
   float ph = ip.x * 0.05 + ip.z * 0.07;
-  float sway = sin(uTime * 1.3 + ph) * 0.06 + sin(uTime * 2.9 + ph * 1.7) * 0.025;
+  float sway = sin(uTime * 1.1 + ph) * 0.08 + sin(uTime * 2.3 + ph * 1.7) * 0.03;
   float hf = max(0.0, transformed.y - 2.0) / 6.0;
-  transformed.x += sway * hf * hf * 3.0 * uWind;
-  transformed.z += sway * 0.6 * hf * hf * 2.0 * uWind;
+  transformed.x += sway * hf * hf * 3.5 * uWind;
+  transformed.z += sway * 0.7 * hf * hf * 2.5 * uWind;
 }`)
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nuniform float uDark;')
