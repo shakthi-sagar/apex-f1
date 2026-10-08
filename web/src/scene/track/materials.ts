@@ -73,6 +73,12 @@ float paintMask; float wetMask;`)
   float eL = smoothstep(lw + 0.025, lw, abs(d - (vL - 0.18)));
   float eR = smoothstep(lw + 0.025, lw, abs(d - (vR + 0.18)));
   paintMask = max(eL, eR);
+  // red/white curbs visible at the edge
+  float curbL = smoothstep(0.5, 0.3, abs(d - (vL - 0.5))) * step(vL - 1.0, d);
+  float curbR = smoothstep(0.5, 0.3, abs(d - (vR + 0.5))) * step(d, vR + 1.0);
+  float curb = max(curbL, curbR);
+  vec3 curbCol = mix(vec3(0.85, 0.1, 0.1), vec3(0.95), step(0.5, fract(s * 0.5)));
+  diffuseColor.rgb = mix(diffuseColor.rgb, curbCol, curb * 0.3);
   // start / finish line (s = 0)
   float sw = min(abs(s), abs(s - uLength));
   float startLine = step(sw, 0.5) * step(vR, d) * step(d, vL);
