@@ -79,6 +79,9 @@ float paintMask; float wetMask;`)
   float curb = max(curbL, curbR);
   vec3 curbCol = mix(vec3(0.85, 0.1, 0.1), vec3(0.95), step(0.5, fract(s * 0.5)));
   diffuseColor.rgb = mix(diffuseColor.rgb, curbCol, curb * 0.3);
+  // subtle track edge darkening (rubber buildup)
+  float edgeDark = smoothstep(0.5, 0.0, abs(d - vL)) + smoothstep(0.5, 0.0, abs(d - vR));
+  base *= 1.0 - edgeDark * 0.08;
   // start / finish line (s = 0)
   float sw = min(abs(s), abs(s - uLength));
   float startLine = step(sw, 0.5) * step(vR, d) * step(d, vL);
