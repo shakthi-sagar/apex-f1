@@ -86,9 +86,11 @@ float paintMask; float wetMask;`)
   float gridLine = inGrid * step(slotFront, 0.12) * step(boxLat, 1.1);
   float gridSide = inGrid * step(abs(boxLat - 1.1), 0.09) * step(gs - (6.0 + slot * 8.0), 1.6);
   paintMask = max(paintMask, max(startLine, max(gridLine, gridSide)));
-  vec3 paint = vec3(0.86);
+  vec3 paint = vec3(0.88);
   // worn paint
-  paint *= 0.85 + 0.15 * g2;
+  paint *= 0.82 + 0.18 * g2;
+  // subtle blue tint on edge lines for better visibility
+  paint = mix(paint, vec3(0.9, 0.92, 0.95), 0.15);
   diffuseColor.rgb = mix(base, paint, paintMask);
   // wetness: darkening + puddles in low / worn spots
   float pud = smoothstep(0.52, 0.72, fbm3(wp * 0.12 + 3.0) + 0.15 * g1);

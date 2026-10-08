@@ -166,8 +166,10 @@ varying vec4 vInfo; varying vec2 vFac; float bRough; vec3 bEmit;`)
     vec3 col = mix(wallCol, glass, win * (kind == 3.0 ? 0.3 : 1.0));
     col = mix(col, glass, glassy * 0.75);
     // grime toward the base, weather streaks
-    col *= 0.82 + 0.18 * smoothstep(0.0, 4.0, vFac.y);
-    col *= 0.92 + 0.08 * vnoise(vec2(vFac.x * 0.6, vFac.y * 0.08));
+    col *= 0.78 + 0.22 * smoothstep(0.0, 4.0, vFac.y);
+    col *= 0.9 + 0.1 * vnoise(vec2(vFac.x * 0.6, vFac.y * 0.08));
+    // subtle vertical staining
+    col *= 0.95 + 0.05 * vnoise(vec2(vFac.x * 0.15, vFac.y * 0.02));
     diffuseColor.rgb = col;
     bRough = mix(0.88, 0.12, max(win, glassy));
     // lit windows at night (random per window)
