@@ -261,11 +261,11 @@ export const compoundColor = (c: number) => COMPOUND_COLORS[c] ?? '#888'
 export function liveryMaterial(l: Livery, envIntensity = 1): THREE.MeshPhysicalMaterial {
   const m = new THREE.MeshPhysicalMaterial({
     color: 0xffffff,
-    roughness: l.finish === 'satin' ? 0.38 : 0.2,
-    metalness: 0.22,
-    clearcoat: l.finish === 'satin' ? 0.3 : 1.0,
-    clearcoatRoughness: l.finish === 'satin' ? 0.3 : 0.05,
-    envMapIntensity: envIntensity * 1.2,
+    roughness: l.finish === 'satin' ? 0.35 : 0.18,
+    metalness: 0.25,
+    clearcoat: l.finish === 'satin' ? 0.35 : 1.0,
+    clearcoatRoughness: l.finish === 'satin' ? 0.25 : 0.04,
+    envMapIntensity: envIntensity * 1.3,
   })
   const uniforms = {
     uPrimary: { value: new THREE.Color(l.primary) },
