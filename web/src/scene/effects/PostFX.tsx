@@ -23,9 +23,9 @@ export function PostFX() {
       <EffectComposer multisampling={0} enableNormalPass={false}>
         <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.2} intensity={0.45} radius={0.6} />
         <ToneMapping mode={ToneMappingMode.AGX} />
-        <HueSaturation saturation={0.14} />
-        <BrightnessContrast brightness={-0.01} contrast={0.12} />
-        <Vignette offset={0.28} darkness={0.55} />
+        <HueSaturation saturation={0.18} />
+        <BrightnessContrast brightness={-0.01} contrast={0.18} />
+        <Vignette offset={0.26} darkness={0.6} />
         <SMAA />
       </EffectComposer>
     )
@@ -36,9 +36,9 @@ export function PostFX() {
       <DepthOfField ref={dof} worldFocusDistance={30} worldFocusRange={12} bokehScale={0} resolutionScale={0.5} />
       <Bloom mipmapBlur luminanceThreshold={1.0} luminanceSmoothing={0.2} intensity={0.55} radius={0.7} />
       <ToneMapping mode={ToneMappingMode.AGX} />
-      <HueSaturation saturation={0.14} />
-      <BrightnessContrast brightness={-0.01} contrast={0.12} />
-      <Vignette offset={0.28} darkness={0.55} />
+      <HueSaturation saturation={0.18} />
+      <BrightnessContrast brightness={-0.01} contrast={0.18} />
+      <Vignette offset={0.26} darkness={0.6} />
     </EffectComposer>
   )
 }

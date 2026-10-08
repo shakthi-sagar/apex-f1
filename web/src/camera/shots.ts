@@ -23,7 +23,7 @@ export interface TracksideCam {
 }
 
 /** Automatically generated broadcast-style camera positions around the lap. */
-export function tracksideCameras(c: CircuitModel, heightAt: (x: number, z: number) => number): TracksideCam[] {
+export function tracksideCameras(c: CircuitModel, heightAt: (x: number, z: number) => number, buildingHeightAt?: (x: number, z: number) => number): TracksideCam[] {
   const cams: TracksideCam[] = []
   // street circuits: cameras sit on buildings/gantries — higher and closer to the wall
   const street = !!(c.meta as { street?: boolean }).street
@@ -34,19 +34,22 @@ export function tracksideCameras(c: CircuitModel, heightAt: (x: number, z: numbe
     const d = side > 0 ? c.barrierLeft[i] + extra : c.barrierRight[i] - extra
     c.frame(s, d, f)
     const gy = Math.max(heightAt(f.x, f.z), f.y)
-    cams.push({ s: c.wrap(s), pos: new THREE.Vector3(f.x, gy + h, f.z), kind, label })
+    // ensure camera is above any nearby building
+    const bh = buildingHeightAt ? buildingHeightAt(f.x, f.z) : 0
+    const camH = Math.max(h, bh - gy + 5)
+    cams.push({ s: c.wrap(s), pos: new THREE.Vector3(f.x, gy + camH, f.z), kind, label })
   }
   for (const k of c.meta.corners) {
     const i = Math.floor(k.s / c.ds) % c.n
     const outside = c.curvature[i] > 0 ? -1 : 1
-    place(k.s + 25, outside, 14 * OFF, 11 * H, 'corner', `T${k.label}`)
+    place(k.s + 25, outside, 14 * OFF, 16 * H, 'corner', `T${k.label}`)
   }
   // straights: every ~350 m where no corner camera is close
   for (let s = 0; s < c.length; s += 350) {
     if (cams.some((x) => Math.abs(x.s - s) < 160)) continue
-    place(s, ((s / 350) | 0) % 2 ? 1 : -1, 10 * OFF, 9 * H, 'straight', 'Straight')
+    place(s, ((s / 350) | 0) % 2 ? 1 : -1, 10 * OFF, 14 * H, 'straight', 'Straight')
   }
-  place(40, c.meta.pit.side === 'left' ? -1 : 1, 10, 9, 'start', 'Start/Finish')
+  place(40, c.meta.pit.side === 'left' ? -1 : 1, 10, 14, 'start', 'Start/Finish')
   return cams.sort((a, b) => a.s - b.s)
 }
 

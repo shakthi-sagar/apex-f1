@@ -17,7 +17,27 @@ export function CameraRig({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSa
   const controls = useRef<OrbitImpl>(null)
   const mode = useUI((s) => s.camera)
   const director = useMemo(() => new Director(rt), [rt])
-  const cams = useMemo(() => tracksideCameras(rt.circuit, (x, z) => terrain.height(x, z)), [rt, terrain])
+  const cams = useMemo(() => {
+    // building height lookup: sample the world's building data to keep cameras out of structures
+    const bldHeight = (x: number, z: number) => {
+      const w = rt.data.world
+      const offs = w.get<Uint32Array>('bld_offsets')
+      const xy = w.get<Float32Array>('bld_xy')
+      const hgt = w.get<Float32Array>('bld_height')
+      const base = w.get<Float32Array>('bld_base')
+      const north = -z
+      let maxH = 0
+      // check buildings in a coarse grid around the point
+      for (let b = 0; b < hgt.length; b++) {
+        const i0 = offs[b]
+        const bx = xy[i0 * 2], by = -xy[i0 * 2 + 1]
+        const d = Math.hypot(bx - x, by - north)
+        if (d < 25) maxH = Math.max(maxH, base[b] + hgt[b])
+      }
+      return maxH
+    }
+    return tracksideCameras(rt.circuit, (x, z) => terrain.height(x, z), bldHeight)
+  }, [rt, terrain])
   const shot = useMemo(() => newShot(), [])
   const cur = useRef({ pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 50, init: false, shotStart: 0, seed: 0.3, lastMode: '', lastDriver: '' })
   const lastTime = useRef(rt.time)

@@ -50,12 +50,24 @@ float paintMask; float wetMask;`)
   float g2 = vnoise(wp * 7.0);
   float g3 = n_hash(floor(wp * 60.0));
   vec3 base = vec3(0.16, 0.162, 0.168) * (0.82 + 0.28 * g1) * (0.92 + 0.12 * g2) * (0.95 + 0.1 * g3);
+  // subtle warm/cool variation across the track
+  base *= 1.0 + 0.04 * sin(d * 2.5 + fbm3(wp * 0.01) * 6.0);
   // patches / resurfacing
   float patchN = smoothstep(0.62, 0.66, fbm3(wp * 0.035 + 7.0));
   base = mix(base, base * 0.78, patchN * 0.6);
   // rubber on the racing line
   float rub = exp(-pow((d - vRL) / 1.6, 2.0)) * (0.6 + 0.4 * fbm3(vec2(s * 0.05, d)));
   base *= 1.0 - 0.32 * rub;
+  // tire marks: dark streaks along the racing line, offset to wheel positions
+  float tm1 = exp(-pow((d - vRL - 0.8) / 0.25, 2.0)) * smoothstep(0.3, 0.7, fbm3(vec2(s * 0.08, d * 3.0)));
+  float tm2 = exp(-pow((d - vRL + 0.8) / 0.25, 2.0)) * smoothstep(0.3, 0.7, fbm3(vec2(s * 0.08 + 5.0, d * 3.0)));
+  float tm3 = exp(-pow((d - vRL - 0.35) / 0.15, 2.0)) * smoothstep(0.4, 0.8, fbm3(vec2(s * 0.12, d * 4.0)));
+  float tm4 = exp(-pow((d - vRL + 0.35) / 0.15, 2.0)) * smoothstep(0.4, 0.8, fbm3(vec2(s * 0.12 + 3.0, d * 4.0)));
+  float tireMarks = tm1 * 0.18 + tm2 * 0.18 + tm3 * 0.12 + tm4 * 0.12;
+  base *= 1.0 - tireMarks * (1.0 - wetMask);
+  // skid marks at heavy braking zones (corners)
+  float skid = smoothstep(0.75, 0.95, fbm3(vec2(s * 0.15, d * 2.0))) * exp(-pow((d - vRL) / 2.0, 2.0));
+  base *= 1.0 - skid * 0.15 * (1.0 - wetMask);
   // edge lines (white, ~20 cm) just inside the edges
   float lw = 0.2;
   float eL = smoothstep(lw + 0.02, lw, abs(d - (vL - 0.15))) ;
@@ -158,6 +170,9 @@ varying float vSurf; varying float vEdge; varying vec3 vWP; varying vec2 vDS; fl
   float fine = vnoise(wp * 6.0);
   vec3 grass = uGrass * (0.75 + 0.45 * n) * (0.9 + 0.2 * fine);
   grass = mix(grass, grass * vec3(1.1, 1.05, 0.8), smoothstep(0.55, 0.75, vnoise(wp * 0.07)));
+  // patches of worn/yellow grass near the track edge
+  float worn = smoothstep(0.3, 0.0, vEdge) * smoothstep(0.5, 0.8, vnoise(wp * 0.05));
+  grass = mix(grass, vec3(0.55, 0.5, 0.25), worn * 0.4);
   // mowing stripes
   grass *= 0.93 + 0.07 * step(0.5, fract(vDS.y / 12.0));
   vec3 tarmac = vec3(0.3, 0.31, 0.32) * (0.85 + 0.25 * n);
