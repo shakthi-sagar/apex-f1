@@ -77,6 +77,7 @@ for (const mode of MODES) {
     return {
       occluded: blocked ? { d: +blocked.distance.toFixed(2), name: label(blocked.object) } : null,
       distToCar: +distToCar.toFixed(1),
+      near: cam.near,
       nearest: Number.isFinite(nearest) ? +nearest.toFixed(2) : null,
       nearestName,
     }
@@ -85,15 +86,20 @@ for (const mode of MODES) {
 }
 
 console.log(`occlusion sweep @ t=${time}  driver=${drv}\n`)
-console.log('mode'.padEnd(12) + 'distToCar'.padStart(11) + 'occluder'.padStart(26) + '  nearest')
+console.log('mode'.padEnd(12) + 'distToCar'.padStart(11) + 'near'.padStart(7) + 'occluder'.padEnd(26) + '  nearest')
 for (const r of rows) {
   const occ = r.occluded ? `${r.occluded.name}@${r.occluded.d}m` : '-'
-  console.log(r.mode.padEnd(12) + `${r.distToCar}`.padStart(11) + occ.padEnd(26) + `  ${r.nearest ?? '-'}m ${r.nearestName}`)
+  const clip = r.nearest !== null && r.nearest < r.near ? ' <-- INSIDE NEAR PLANE' : ''
+  console.log(r.mode.padEnd(12) + `${r.distToCar}`.padStart(11) + `${r.near}`.padStart(7) + occ.padEnd(26) + `  ${r.nearest ?? '-'}m ${r.nearestName}${clip}`)
 }
 const bad = rows.filter((r) => r.nearest !== null && r.nearest < 1.5)
+const clipped = rows.filter((r) => r.nearest !== null && r.nearest < r.near)
+console.log(clipped.length
+  ? `\nFLAGGED (geometry inside near plane): ${clipped.map((r) => `${r.mode} ${r.nearest}m<${r.near}m`).join(', ')}`
+  : '\nno near-plane clipping detected')
 console.log(bad.length
   ? `\nFLAGGED (lens buried in geometry <1.5m): ${bad.map((r) => r.mode).join(', ')}`
-  : '\nno camera buried in geometry')
+  : 'no camera buried in geometry')
 // Foreground occlusion is a framing choice, not a defect: a 0.7m trackside dolly
 // always looks across the road. Only report it, never fail on it.
 const fg = rows.filter((r) => r.occluded)
