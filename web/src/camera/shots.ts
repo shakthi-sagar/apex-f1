@@ -155,12 +155,18 @@ export const SHOTS: Partial<Record<CameraMode, (ctx: ShotContext, out: Shot) => 
     // low dolly: camera sits by the track ahead and sweeps as the car passes
     const p = ctx.target
     const c = ctx.rt.circuit
+    const street = !!(c.meta as { street?: boolean }).street
     const anchorS = (ctx.target.sample.s - (ctx.shotTime * p.sample.v) + 90)
     const i = Math.floor(c.wrap(anchorS) / c.ds) % c.n
     const side = ctx.seed > 0.5 ? 1 : -1
-    const d = side > 0 ? c.left[i] + 3.5 : c.right[i] - 3.5
+    // A circuit with runoff can hide a 0.7m dolly just outside the track edge, but a
+    // street circuit has a wall within a metre or two of that same line -- the camera
+    // ends up buried inside it. Sit outside the barrier and above wall height instead.
+    const d = street
+      ? (side > 0 ? c.barrierLeft[i] + 6 : c.barrierRight[i] - 6)
+      : (side > 0 ? c.left[i] + 3.5 : c.right[i] - 3.5)
     const f = c.frame(anchorS, d, { x: 0, y: 0, z: 0, tx: 1, tz: 0, nx: 0, nz: 0, grade: 0, curvature: 0 })
-    out.pos.set(f.x, f.y + 0.7, f.z)
+    out.pos.set(f.x, f.y + (street ? 5 : 0.7), f.z)
     carPoint(p, 1.5, 0.5, 0, out.look)
     const dist = out.pos.distanceTo(p.position)
     out.fov = THREE.MathUtils.clamp(2 * THREE.MathUtils.radToDeg(Math.atan(4.5 / dist)), 8, 60)

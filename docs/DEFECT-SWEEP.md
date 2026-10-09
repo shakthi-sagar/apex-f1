@@ -43,6 +43,19 @@ track→camera vector. Nearest surface went **0.2 m → 3.48 m**.
 - **Regression:** full 11-mode sweep at `t=1800` shows no new blank/black frames; fps
   60.5 (baseline).
 
+### D2 — `cinematic` camera buried inside the street-circuit wall
+- **Repro (before):** race 2024/18 (marina_bay), `t=600`, camera `cinematic` —
+  `/tmp/mb/v-cinematic.png` showed a flat blue wall panel filling the frame, car invisible.
+- **Cause:** the dolly sat `0.7 m` above the road and `3.5 m` outside the **track edge**
+  (`c.left`/`c.right`), ignoring the barrier. Interlagos has runoff there; Marina Bay has a
+  barrier within a metre or two of the edge, so the lens ended up inside it (nearest
+  surface **0.33 m**).
+- **Fix:** on circuits flagged `meta.street`, sit outside `barrierLeft/Right` (+6 m) and
+  raise to 5 m. Non-street circuits keep the low dolly unchanged.
+- **After:** `occlcheck` on marina_bay reports **no camera buried in geometry**;
+  `cinematic` dropped out of the flagged list. Interlagos `cinematic` unchanged
+  (35.5% near-black before and after).
+
 ## Ruled out (false positives)
 
 - **cinematic "100% occluded"** — `occlsoak` reports 12/12 blocked, but the occluder is
@@ -55,6 +68,10 @@ track→camera vector. Nearest surface went **0.2 m → 3.48 m**.
   `mix(roughnessFactor, …)`, a read-modify-write. Scanner now tracks reads; reports clean.
 - **Heatmap overlay occluder** — `MeshBasicMaterial` white, flagged by raycast but
   `visible === false` (heatmap is off by default). THREE raycasts invisible geometry.
+- **Catch fence on street circuits** — `tv`/`trackside` report `track` blocking ~12 m
+  before the subject on marina_bay. `occlwho` identifies it as the fence:
+  `opacity 0.55, transparent: true`, `color 9aa0a6`. Semi-transparent, so not a real
+  occluder; `occlcheck` should treat low-opacity surfaces as foreground, not blockage.
 
 ## Clean
 
