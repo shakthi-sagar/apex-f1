@@ -6,6 +6,9 @@ import { instanced, loadInstanceParts } from '../assets'
 import { freeze } from '../static'
 import type { TerrainSampler } from './terrainSampler'
 
+/** How far behind the lens the tower structure is placed (m). */
+const TOWER_BACK = 4
+
 /**
  * Blender-authored trackside kit: TV camera towers exactly where the trackside cameras film
  * from (so the broadcast shots come from visible towers) and marshal posts along the barriers.
@@ -21,12 +24,22 @@ export function TracksideProps({ rt, terrain }: { rt: RaceRuntime; terrain: Terr
       c.frame(s, 0, f)
       return Math.atan2(-(f.z - z), f.x - x) // model +X towards the track
     }
-    // towers: camera sits 1.2 m above the platform, so the tower base is below the shot position
+    // Towers sit just BEHIND each trackside camera: the shot position is the lens and sits at the
+    // platform's front edge. Coincident placement puts the rig inside the tower mesh, which
+    // renders the broadcast shot black.
     const towers = tracksideCameras(c, (x, z) => terrain.height(x, z)).map((cam) => {
       const ground = terrain.inside(cam.pos.x, cam.pos.z) ? terrain.height(cam.pos.x, cam.pos.z) : cam.pos.y - 9
       const scaleY = Math.max(0.4, (cam.pos.y - 1.2 - ground) / 8)
-      return new THREE.Matrix4().compose(new THREE.Vector3(cam.pos.x, ground, cam.pos.z),
-        new THREE.Quaternion().setFromAxisAngle(up, facing(cam.pos.x, cam.pos.z, cam.s)), new THREE.Vector3(1, scaleY, 1))
+      // unit vector from the track out to the camera, so the tower can step back along it
+      c.frame(cam.s, 0, f)
+      let ox = cam.pos.x - f.x, oz = cam.pos.z - f.z
+      const len = Math.hypot(ox, oz) || 1
+      ox /= len; oz /= len
+      const bx = cam.pos.x + ox * TOWER_BACK
+      const bz = cam.pos.z + oz * TOWER_BACK
+      const bGround = terrain.inside(bx, bz) ? terrain.height(bx, bz) : ground
+      return new THREE.Matrix4().compose(new THREE.Vector3(bx, bGround, bz),
+        new THREE.Quaternion().setFromAxisAngle(up, facing(bx, bz, cam.s)), new THREE.Vector3(1, scaleY, 1))
     })
     // marshal posts every ~280 m, alternating sides, just behind the barrier
     const posts: THREE.Matrix4[] = []

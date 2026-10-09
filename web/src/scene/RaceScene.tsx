@@ -31,6 +31,7 @@ function Driver({ rt }: { rt: RaceRuntime }) {
     ;(window as unknown as { __f1cam: unknown }).__f1cam = state.camera
     ;(window as unknown as { __f1scene: unknown }).__f1scene = state.scene
     ;(window as unknown as { __f1gl: unknown }).__f1gl = state.gl
+    ;(window as unknown as { __f1three: unknown }).__f1three = THREE
   }, -100)
   return null
 }

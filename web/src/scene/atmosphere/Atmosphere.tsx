@@ -103,11 +103,11 @@ export function Atmosphere({ rt }: { rt: RaceRuntime }) {
     L.position.copy(center).addScaledVector(look.sunDir, 600)
     L.target = target
     const overcast = look.cloud
-    L.intensity = isNight ? 1.35 : THREE.MathUtils.lerp(3.6, 1.1, overcast) * THREE.MathUtils.clamp(el / 12, 0.2, 1)
+    L.intensity = isNight ? 1.35 : THREE.MathUtils.lerp(3.8, 1.2, overcast) * THREE.MathUtils.clamp(el / 12, 0.2, 1)
     if (isNight) L.color.set('#f2f4ff')
     else L.color.setRGB(1, 0.95 - lowSun * 0.2, 0.88 - lowSun * 0.35)
     L.shadow.intensity = THREE.MathUtils.lerp(1, 0.55, overcast)
-    hemi.current.intensity = isNight ? 0.1 : THREE.MathUtils.lerp(0.6, 0.75, overcast)
+    hemi.current.intensity = isNight ? 0.1 : THREE.MathUtils.lerp(0.65, 0.8, overcast)
     hemi.current.color.set(isNight ? '#35425e' : '#cfdcea').lerp(new THREE.Color('#aeb4ba'), overcast)
     hemi.current.groundColor.set(isNight ? '#0b0c10' : '#5a5448')
 
