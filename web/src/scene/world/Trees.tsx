@@ -5,6 +5,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import type { RaceRuntime } from '../../replay/runtime'
 import { look } from '../atmosphere/Atmosphere'
 import { freeze } from '../static'
+import { scriptTime } from '../scripted'
 
 /** Volumetric canopy: many jittered icosphere lobes around an ellipsoid shell (seeded). */
 function canopyTree(seed: number, height: number, crownR: number, crownH: number, lobes: number, detail = 1): THREE.BufferGeometry {
@@ -207,7 +208,7 @@ export function Trees({ rt }: { rt: RaceRuntime }) {
   useFrame((state) => {
     const u = (mat.userData as { u: { uTime: { value: number }; uWind: { value: number }; uDark: { value: number } } }).u
     u.uDark.value += ((look.night ? 0.3 : 1) - u.uDark.value) * 0.1
-    u.uTime.value = state.clock.elapsedTime
+    u.uTime.value = scriptTime(state.clock.elapsedTime)
     u.uWind.value = 0.6 + Math.min(2, (rt.weather?.windSpeed ?? 1)) * 0.5
     // LOD selection 5x per second (camera moves smoothly; per-frame work is unnecessary)
     if (state.clock.elapsedTime - lastLod.current < 0.2) return

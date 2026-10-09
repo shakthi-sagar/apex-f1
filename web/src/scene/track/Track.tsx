@@ -8,6 +8,7 @@ import { asphaltMaterial, fenceMaterial, kerbMaterial, runoffMaterial, trackUnif
 import { ranges, ribbon } from './trackGeometry'
 import { look } from '../atmosphere/Atmosphere'
 import { freeze } from '../static'
+import { scriptTime } from '../scripted'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { roofMaterial } from '../shaders/roof'
 
@@ -258,7 +259,7 @@ export function Track({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSample
   useFrame((state) => {
     trackUniforms.uWet.value = look.wet
     trackUniforms.uFlood.value += ((look.night ? 0.55 : 0) - trackUniforms.uFlood.value) * 0.1
-    trackUniforms.uTime.value = state.clock.elapsedTime
+    trackUniforms.uTime.value = scriptTime(state.clock.elapsedTime)
   })
   return <primitive object={group} />
 }

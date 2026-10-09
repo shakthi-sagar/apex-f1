@@ -4,6 +4,7 @@ import * as THREE from 'three'
 import type { RaceRuntime } from '../../replay/runtime'
 import { createSkyMaterial, sunDirection } from './sky'
 import { useUI } from '../../state/ui'
+import { scriptTime } from '../scripted'
 
 export interface LookState {
   sunDir: THREE.Vector3
@@ -88,7 +89,7 @@ export function Atmosphere({ rt }: { rt: RaceRuntime }) {
     U.uSunDir.value.copy(look.sunDir)
     U.uCloud.value = look.cloud
     U.uNight.value = isNight ? 1 : 0
-    U.uTime.value = state.clock.elapsedTime + t * 0.05
+    U.uTime.value = scriptTime(state.clock.elapsedTime) + t * 0.05
     const lowSun = THREE.MathUtils.clamp(1 - el / 25, 0, 1)
     ;(U.uSunColor.value as THREE.Color).setRGB(1, 0.93 - lowSun * 0.25, 0.82 - lowSun * 0.45)
     ;(U.uHorizon.value as THREE.Color).set('#b9cbdc').lerp(new THREE.Color('#f0c9a0'), lowSun * 0.5)

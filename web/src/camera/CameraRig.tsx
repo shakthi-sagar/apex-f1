@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitImpl } from 'three-stdlib'
 import type { RaceRuntime } from '../replay/runtime'
 import { useUI } from '../state/ui'
 import type { TerrainSampler } from '../scene/world/terrainSampler'
+import { scriptTime, scriptDt } from '../scene/scripted'
 import { Director } from './director'
 import { SHOTS, newShot, tracksideCameras, type ShotContext } from './shots'
 
@@ -54,7 +55,7 @@ export function CameraRig({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSa
 
   useFrame((state, dtRaw) => {
     if ((window as unknown as { __f1freeze?: boolean }).__f1freeze) { if (controls.current) controls.current.enabled = false; return }
-    const dt = Math.min(0.1, dtRaw)
+    const dt = scriptDt(dtRaw)
     const ui = useUI.getState()
     // establishing flyover (first ~6 s, director only); any user camera choice skips it
     if (!intro.current.done) {
@@ -161,7 +162,7 @@ export function CameraRig({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSa
     }
     camera.position.copy(c.pos)
     if (shot.shake) {
-      const e = state.clock.elapsedTime
+      const e = scriptTime(state.clock.elapsedTime)
       camera.position.x += (Math.sin(e * 37.1) + Math.sin(e * 23.7)) * shot.shake * 0.5
       camera.position.y += (Math.sin(e * 41.3) + Math.sin(e * 17.9)) * shot.shake * 0.5
     }

@@ -3,6 +3,7 @@ import { useMemo } from 'react'
 import * as THREE from 'three'
 import type { RaceRuntime } from '../../replay/runtime'
 import { look } from '../atmosphere/Atmosphere'
+import { scriptTime } from '../scripted'
 
 const DROPS = 14000
 const BOX = 60
@@ -68,7 +69,7 @@ export function Rain({ rt }: { rt: RaceRuntime }) {
     const target = w?.rain ? 0.55 + 0.45 * Math.min(1, rt.wetness) : 0
     const u = mat.uniforms
     u.uAmount.value += (target - u.uAmount.value) * 0.02
-    u.uTime.value = state.clock.elapsedTime
+    u.uTime.value = scriptTime(state.clock.elapsedTime)
     u.uCam.value.copy(camera.position)
     const fov = (camera as THREE.PerspectiveCamera).fov
     u.uNear.value = THREE.MathUtils.clamp(2.5 * (55 / fov), 1.5, 26)
