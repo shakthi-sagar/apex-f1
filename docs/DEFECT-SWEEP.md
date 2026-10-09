@@ -27,21 +27,21 @@ Raycast from lens to subject hit `ts_dark` at **0.2 m**; the camera sat inside t
 plane it filled the frame → black. Towers now sit `TOWER_BACK = 4` m outward along the
 track→camera vector. Nearest surface went **0.2 m → 3.48 m**.
 
-## Open
-
-### D1 — `orbit` / `free` can inherit a camera position buried in trackside geometry
-- **Repro:** seek `t=1800`, camera mode `free` (or `orbit`) — `/tmp/sweep2/v-free.png`,
-  `/tmp/sweep2/v-orbit.png`
-- **Evidence:** `blackcheck` near-black share **37.4%** (`free`) / **31.7%** (`orbit`) vs
-  ~3.6% on the grid. Screenshot shows large black polygons *in front of* visible car tags,
-  i.e. the camera is embedded in geometry rather than the subject being hidden.
-- **Root cause:** `CameraRig` only repositions the camera when
-  `|target.position - orbitFollow| > 200`. On entry that delta is ≈0, so the camera keeps
-  the previous mode's position — e.g. the 0.7 m cinematic dolly, which sits down among
-  barriers and buildings. `free` has no follow logic at all, so it never recovers.
-- **Note:** `views.mjs` cannot position `orbit`/`free` independently (they inherit the
-  prior mode), so the automated matrix treats them as a shared sample. This is a harness
-  limitation, not evidence that the modes are independently broken.
+### D1 — `orbit` / `free` inherited a buried camera position  *(fixed)*
+- **Repro (before):** seek `t=1800`, camera mode `free` — large black polygons across
+  the viewport, near-black **37.4%** (`free`) / **31.7%** (`orbit`).
+- **Cause:** `CameraRig` only repositions when `|target - orbitFollow| > 200`. On entry
+  that delta is ~0, so the camera kept the previous shot's position — here the 0.7 m
+  cinematic dolly sitting down among barriers and buildings. `free` has no follow logic
+  at all, so it never recovered.
+- **Fix:** on entry to `orbit`/`free`, cast six rays from the lens (car meshes excluded);
+  if any hits within 2 m the lens is embedded, so fall back to a three-quarter framing at
+  `target + (14, 8, 14)`.
+- **After:** near-black **37.4% → 18.7%** (`free`), **31.7% → 21.6%** (`orbit`), and
+  `/tmp/after/v-free.png` shows the car in clear view rather than black polygons. The
+  lower mean luminance is the car's own dark bodywork filling frame, not missing geometry.
+- **Regression:** full 11-mode sweep at `t=1800` shows no new blank/black frames; fps
+  60.5 (baseline).
 
 ## Ruled out (false positives)
 
@@ -59,5 +59,14 @@ track→camera vector. Nearest surface went **0.2 m → 3.48 m**.
 ## Clean
 
 - No dead shader writes: `shaderscan` reports none across `src/scene` and `src/camera`.
-- No blank/black frames in the 9 script-driven modes at `t=30` or `t=1800`.
+- No blank/black frames in the 9 script-driven modes at `t=30` or `t=1800`; `orbit` and
+  `free` clean after the D1 fix.
+- No camera buried in geometry across all 11 modes (`occlcheck`, threshold 1.5 m).
 - `npx tsc --noEmit` clean; 60.5 fps, at the recorded baseline.
+
+## Still open — needs a human decision
+
+The six speculative material/lighting changes on this branch are all *live* (pixel-diff
+confirms each alters the frame) but none has human sign-off. PostFX and Atmosphere
+account for ~92% of the aggregate change. See the audit table in the branch history;
+they cannot be resolved without someone judging the images.

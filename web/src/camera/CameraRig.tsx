@@ -13,8 +13,33 @@ import { SHOTS, newShot, tracksideCameras, type ShotContext } from './shots'
 /** Camera state shared with post-processing (depth of field focus). */
 export const cameraState = { focusDistance: 30, dofAmount: 0, cutAt: 0, mode: 'chase' as string }
 
+/**
+ * True when the lens is embedded in geometry.
+ *
+ * `orbit`/`free` inherit whatever position the previous shot left behind -- e.g. the
+ * 0.7 m cinematic dolly, which sits down among barriers and grandstands -- and a camera
+ * buried in a wall renders black. Cheap: six rays, run only on mode entry.
+ */
+function buried(scene: THREE.Object3D, camera: THREE.PerspectiveCamera, near = 2): boolean {
+  const isCar = (o: THREE.Object3D | null) => {
+    for (let p = o; p; p = p.parent) if (p.name.startsWith('car-')) return true
+    return false
+  }
+  const rc = new THREE.Raycaster()
+  rc.near = 0.01
+  rc.far = near
+  const dir = new THREE.Vector3()
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2
+    dir.set(Math.cos(a), -0.3, Math.sin(a)).normalize().applyQuaternion(camera.quaternion)
+    rc.set(camera.position, dir)
+    if (rc.intersectObjects(scene.children, true).some((h) => !isCar(h.object))) return true
+  }
+  return false
+}
+
 export function CameraRig({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSampler }) {
-  const { camera } = useThree() as { camera: THREE.PerspectiveCamera }
+  const { camera, scene } = useThree() as { camera: THREE.PerspectiveCamera; scene: THREE.Scene }
   const controls = useRef<OrbitImpl>(null)
   const mode = useUI((s) => s.camera)
   const director = useMemo(() => new Director(rt), [rt])
@@ -50,8 +75,15 @@ export function CameraRig({ rt, terrain }: { rt: RaceRuntime; terrain: TerrainSa
       const sel = rt.byNum.get(useUI.getState().selected ?? '') ?? rt.poses[0]
       controls.current.target.copy(sel.position)
       orbitFollow.current.copy(sel.position)
+      // The inherited position may be inside a barrier or building; fall back to a
+      // standard three-quarter framing rather than showing a black viewport.
+      if (buried(scene, camera)) {
+        camera.position.copy(sel.position).add(new THREE.Vector3(14, 8, 14))
+        camera.lookAt(sel.position)
+        camera.updateProjectionMatrix()
+      }
     }
-  }, [mode, director, rt])
+  }, [mode, director, rt, scene, camera])
 
   useFrame((state, dtRaw) => {
     if ((window as unknown as { __f1freeze?: boolean }).__f1freeze) { if (controls.current) controls.current.enabled = false; return }
