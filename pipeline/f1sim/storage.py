@@ -20,7 +20,7 @@ SHORT = "public, max-age=30, must-revalidate"
 class Store:
     def __init__(self, local_root: str | None = None, upload: bool = True):
         self.local_root = local_root
-        self.bucket = os.environ.get("R2_BUCKET", "mobbin-archive")
+        self.bucket = os.environ.get("R2_BUCKET", "cdn")
         self.prefix = os.environ.get("R2_PREFIX", "f1-sim").strip("/")
         self._s3 = None
         self.upload = upload and bool(os.environ.get("R2_ENDPOINT_URL")) and bool(os.environ.get("AWS_ACCESS_KEY_ID"))

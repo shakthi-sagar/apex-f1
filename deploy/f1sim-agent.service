@@ -13,7 +13,7 @@ Type=simple
 WorkingDirectory=%h/Projects/f1-sim/pipeline
 EnvironmentFile=%h/.config/shadster/r2.env
 EnvironmentFile=%h/.config/f1sim/agent.env
-Environment=R2_BUCKET=mobbin-archive
+Environment=R2_BUCKET=cdn
 Environment=R2_PREFIX=f1-sim
 Environment=F1SIM_CACHE=%h/Projects/f1-sim/.cache
 Environment=F1SIM_API=https://apex.shadster.dev/api

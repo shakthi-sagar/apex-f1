@@ -31,11 +31,11 @@ Useful dev scripts (headless GPU screenshots): `web/scripts/views.mjs`, `car.mjs
 ## Generate & publish
 
 Credentials come from the environment only (never committed): `R2_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`,
-`AWS_SECRET_ACCESS_KEY`, `R2_BUCKET=mobbin-archive`, `R2_PREFIX=f1-sim`.
+`AWS_SECRET_ACCESS_KEY`, `R2_BUCKET=cdn`, `R2_PREFIX=f1-sim`.
 
 ```bash
 set -a; source ~/.config/shadster/r2.env; set +a
-export R2_BUCKET=mobbin-archive R2_PREFIX=f1-sim
+export R2_BUCKET=cdn R2_PREFIX=f1-sim
 .venv/bin/python -m f1sim.generate --season 2024 --round 21     # publishes to cdn.shadster.dev/f1-sim/
 .venv/bin/python -m f1sim.catalog --season 2024                 # gallery catalog
 ```
@@ -47,7 +47,7 @@ The Worker queues the job in the `SeasonJobs` Durable Object. Two executors are 
 * **Agent mode (active).** Run one or more agents anywhere with outbound HTTPS:
   ```bash
   set -a; source ~/.config/shadster/r2.env; source ~/.config/f1sim/agent.env; set +a
-  export R2_BUCKET=mobbin-archive R2_PREFIX=f1-sim
+  export R2_BUCKET=cdn R2_PREFIX=f1-sim
   .venv/bin/python -m f1sim.agent --api https://apex.shadster.dev/api     # add --once to drain & exit
   ```
   `F1SIM_AGENT_TOKEN` must match the Worker secret `AGENT_TOKEN`.
