@@ -69,8 +69,11 @@ cd web && npx vite build && cd ../worker && npx wrangler deploy
 Add an entry to `pipeline/f1sim/circuit/registry.py` (layout id, track width, DRS zones as corner-relative
 specs, art-direction theme, optional manual registration anchors). Everything else is derived.
 
-## Credits
+## License & credits
 
-Timing & telemetry: [FastF1](https://github.com/theOehrly/Fast-F1) (unofficial F1 live-timing data, non-commercial).
-Map data © OpenStreetMap contributors (ODbL). Terrain: Mapzen Terrain Tiles on AWS Open Data.
-Not affiliated with Formula 1, the FIA or any team; liveries are colour schemes only and car geometry is original.
+Code and original assets: [MIT](LICENSE). Data, attribution and trademark notes: [`NOTICE.md`](NOTICE.md).
+
+Timing & telemetry: [FastF1](https://github.com/theOehrly/Fast-F1) (unofficial F1 live-timing data, non-commercial; no rights to it are claimed).
+Map data © [OpenStreetMap contributors](https://www.openstreetmap.org/copyright) (ODbL). Terrain: Mapzen Terrain Tiles on AWS Open Data.
+Unofficial project, not affiliated with Formula 1, the FIA or any team. F1 and FORMULA 1 are trademarks of Formula One Licensing B.V.;
+liveries are colour schemes only and car geometry is original.

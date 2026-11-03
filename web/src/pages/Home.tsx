@@ -130,7 +130,7 @@ export function Home() {
 
       <footer className="home-foot">
         <span>Timing &amp; telemetry via FastF1 (unofficial, non-commercial). Map data © OpenStreetMap contributors (ODbL). Terrain: Mapzen / AWS Open Data.</span>
-        <span>Not affiliated with Formula 1, the FIA or any team. Liveries are colour schemes only.</span>
+        <span>Unofficial; not affiliated with Formula 1, the FIA or any team. F1 and FORMULA 1 are trademarks of Formula One Licensing B.V. Liveries are colour schemes only.</span>
       </footer>
     </div>
   )
