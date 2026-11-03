@@ -16,11 +16,10 @@ and note the maintainers report it fails from cloud IPs). Alternatively write a 
 |---|---|---|
 | `agent` (default) | any machine: `python -m f1sim.agent --api https://<host>/api` | `F1SIM_AGENT_TOKEN` = Worker `AGENT_TOKEN`, R2 env vars |
 | `container` | Cloudflare Container (Workers Paid) | R2 secrets on the Worker |
-| `github` | a GitHub Actions workflow *you write* that runs `python -m f1sim.agent --season N --round N`; the Worker starts it via `workflow_dispatch` | Worker secret `GITHUB_DISPATCH_TOKEN` (fine-grained PAT, one repo, *Actions: write*), and `GITHUB_REPO`, `GITHUB_WORKFLOW`, `GITHUB_REF`, `DAILY_DISPATCH_CAP` vars |
 
 ## Secrets
 
-Never commit them. Worker secrets: `npx wrangler secret put AGENT_TOKEN` (and the mode-specific ones above). Generator
+Never commit them. Worker secrets: `npx wrangler secret put AGENT_TOKEN` . Generator
 credentials come from the environment only: `R2_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`,
 `R2_BUCKET`, `R2_PREFIX`. Keep local copies in `.secrets/` or `*.env` (git-ignored). Use a **dedicated R2 bucket** with a
 token scoped to it (R2 has no write-only token).

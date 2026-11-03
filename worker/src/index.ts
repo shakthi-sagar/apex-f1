@@ -30,18 +30,11 @@ export interface Env {
   CIRCUIT_VERSION: string
   CDN_HOST: string
   MAX_CONCURRENT_JOBS: string
-  /** "github": dispatch the generate.yml GitHub Actions workflow (no machine of yours needs to be on).
-   *  "container": Workflow drives a Cloudflare Container (Workers Paid).
+  /** "container": Workflow drives a Cloudflare Container (Workers Paid).
    *  "agent": generator agents pull queued jobs over HTTPS (works anywhere, no inbound ports). */
-  GENERATOR_MODE: 'github' | 'container' | 'agent'
-  /** Shared secret for /api/agent/* (agents and the GitHub Actions runner report progress with it). */
+  GENERATOR_MODE: 'container' | 'agent'
+  /** Shared secret for /api/agent/* (generator agents report progress with it). */
   AGENT_TOKEN: string
-  // github mode: `wrangler secret put GITHUB_DISPATCH_TOKEN` — fine-grained PAT, this repo only, "Actions: write"
-  GITHUB_DISPATCH_TOKEN: string
-  GITHUB_REPO: string // owner/name
-  GITHUB_WORKFLOW: string // e.g. generate.yml
-  GITHUB_REF: string // branch the workflow runs from (main)
-  DAILY_DISPATCH_CAP: string
   /** Optional Workers rate-limit binding (see wrangler.jsonc); absent in local dev. */
   GEN_LIMITER?: RateLimit
   // secrets (wrangler secret put) — passed to the container only
@@ -95,23 +88,6 @@ export class Generator extends Container<Env> {
   }
 }
 
-// ------------------------------------------------------------------------------------------ github
-/** Trigger generate.yml. Its `concurrency: race-{season}-{round}` group makes simultaneous dispatches run one build. */
-async function dispatchWorkflow(env: Env, season: number, round: number): Promise<void> {
-  if (!env.GITHUB_DISPATCH_TOKEN || !env.GITHUB_REPO) throw new Error('GitHub dispatch is not configured')
-  const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/${env.GITHUB_WORKFLOW || 'generate.yml'}/dispatches`, {
-    method: 'POST',
-    headers: {
-      authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
-      accept: 'application/vnd.github+json',
-      'x-github-api-version': '2022-11-28',
-      'user-agent': 'apex-f1-worker',
-    },
-    body: JSON.stringify({ ref: env.GITHUB_REF || 'main', inputs: { season: String(season), round: String(round) } }),
-  })
-  if (res.status !== 204) throw new Error(`GitHub responded ${res.status}`)
-}
-
 // ------------------------------------------------------------------------------------------ job registry
 export class SeasonJobs extends DurableObject<Env> {
   private async get(round: number): Promise<Job | undefined> {
@@ -141,9 +117,6 @@ export class SeasonJobs extends DurableObject<Env> {
     const cur = await this.status(round)
     if (ACTIVE.includes(cur.state)) return cur
     if (background && (cur.state === 'failed' || cur.state === 'ready') && Date.now() - cur.updatedAt < BACKOFF_MS) return cur
-    if (this.env.GENERATOR_MODE === 'github' && !(await this.underDailyCap())) {
-      return { ...cur, state: 'failed', error: 'Daily generation limit reached — try again tomorrow', updatedAt: Date.now() }
-    }
     const active = Object.values(await this.all()).filter((j) => ACTIVE.includes(j.state) && Date.now() - j.updatedAt < STALE_MS)
     const attempts = (cur.attempts ?? 0) + 1
     const id = `race-${season}-${round}-${Date.now()}`
@@ -154,29 +127,11 @@ export class SeasonJobs extends DurableObject<Env> {
     if (this.env.GENERATOR_MODE === 'container') {
       await this.ctx.storage.put(`r${round}`, job)
       await this.env.GENERATE.create({ id, params: { season, round } })
-    } else if (this.env.GENERATOR_MODE === 'github') {
-      job.message = 'Starting a generator run'
-      await this.ctx.storage.put(`r${round}`, job)
-      try {
-        await dispatchWorkflow(this.env, season, round)
-      } catch (e) {
-        job.state = 'failed'
-        job.error = `Could not start generation: ${(e as Error).message}`
-        await this.ctx.storage.put(`r${round}`, job)
-      }
     } else {
       job.message = 'Waiting for a generator agent'
       await this.ctx.storage.put(`r${round}`, job)
     }
     return job
-  }
-
-  private async underDailyCap(): Promise<boolean> {
-    const key = `cap:${new Date().toISOString().slice(0, 10)}`
-    const n = ((await this.ctx.storage.get<number>(key)) ?? 0) + 1
-    if (n > Number(this.env.DAILY_DISPATCH_CAP || 150)) return false
-    await this.ctx.storage.put(key, n)
-    return true
   }
 
   /** Agent mode: hand the oldest queued (or abandoned) job to an agent. */
@@ -370,7 +325,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (parts[1] === 'races' && parts.length >= 4) {
     const season = Number(parts[2]), round = Number(parts[3])
     if (!Number.isInteger(season) || !Number.isInteger(round)) return json({ error: 'bad request' }, 400)
-    // Only races in the catalog ever reach a Durable Object or GitHub: arbitrary ids are rejected up front.
+    // Only races in the catalog ever reach a Durable Object: arbitrary ids are rejected up front.
     const cr = await catalogRound(env, season, round)
     if (!cr || cr.unavailable) return json({ state: 'failed', error: 'Race not in catalog' }, 404)
     const m = await manifestFor(env, season, round)
