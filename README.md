@@ -1,5 +1,8 @@
 # Apex — Formula 1 races rebuilt in 3D
 
+> **This project is discontinued.** Formula 1 now requires authentication for its timing archive, so new races can't be
+> generated anonymously. The code is MIT-licensed: please fork it and do whatever you like. See [`DISCONTINUED.md`](DISCONTINUED.md).
+
 Real timing & telemetry, registered onto the real circuit and its OpenStreetMap surroundings, replayed as a
 broadcast-style 3D experience with an automatic race director. Unofficial, non-commercial, MIT-licensed code.
 
@@ -9,18 +12,16 @@ broadcast-style 3D experience with an automatic race director. Unofficial, non-c
 
 ```
 pipeline/   Python: FastF1 + OpenStreetMap + terrain tiles → race & circuit files (JSON / binary)
-worker/     Cloudflare Worker: API, job state, serves the app; asks GitHub Actions to generate missing races
+worker/     Cloudflare Worker: API, job state, serves the app
 web/        React + TypeScript + Vite + React Three Fiber renderer
-.github/    CI, pipeline-output diff for PRs, the generator workflow, deploy
 ```
 
 A race is **not a video**. It is a set of generated data files that the browser renders live. Those files are
 **build output**: a rebuildable cache stored in Cloudflare R2, **never committed** to this repo. The repo holds the
 pipeline, the schema and the renderer.
 
-1. Open an ungenerated race → the Worker checks it exists in the catalog and dispatches the **Generate race**
-   GitHub Actions workflow (one build per race, however many people click).
-2. The workflow runs the pipeline and uploads the files to R2; the page shows progress, then plays the race.
+1. Open an ungenerated race → the Worker checks it exists in the catalog and queues a job (one per race, however many people click).
+2. A generator agent runs the pipeline and uploads the files to R2; the page shows progress, then plays the race.
 3. Data is versioned, so improving the pipeline never breaks the site:
 
 | Version | Meaning | When it changes |
@@ -52,11 +53,10 @@ npm run dev                       # dev serves ./out at /data by default; open /
 > breaks anonymous FastF1 downloads (see [`docs/OPERATIONS.md`](docs/OPERATIONS.md#data-availability)). Races
 > already in your FastF1 cache still generate; new ones need an authenticated FastF1 session.
 
-## Contributing
+## Forking
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md). PRs run type checks, tests and a **pipeline output diff** on sample
-races so pipeline changes are visible before merge. Fork PRs never receive secrets.
-Running your own deployment: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
+No PRs or issues are being handled (see [`DISCONTINUED.md`](DISCONTINUED.md)). To run your own deployment see
+[`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 ## Adding a circuit
 

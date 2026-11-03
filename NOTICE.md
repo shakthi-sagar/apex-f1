@@ -25,5 +25,4 @@ no logos, sponsor marks or official artwork are included. The MIT license does n
 
 ## Takedown
 
-If you are a rights holder and want something removed from the hosted site, open an issue or email
-the maintainer and it will be handled promptly.
+If you are a rights holder and want something removed from the hosted site, email **shadster.dev@gmail.com** and it will be handled promptly.
