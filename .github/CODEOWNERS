@@ -1,0 +1,5 @@
+# Every change needs a review from the maintainer; workflows and the Worker are the sensitive paths.
+*  @shakthi-sagar
+/.github/ @shakthi-sagar
+/worker/ @shakthi-sagar
+/pipeline/ @shakthi-sagar

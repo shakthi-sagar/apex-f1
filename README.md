@@ -1,68 +1,62 @@
 # Apex — Formula 1 races rebuilt in 3D
 
-Real FastF1 timing & telemetry, registered onto the real circuit and its OpenStreetMap surroundings,
-replayed as a broadcast-style 3D experience with an automatic race director.
+Real timing & telemetry, registered onto the real circuit and its OpenStreetMap surroundings, replayed as a
+broadcast-style 3D experience with an automatic race director. Unofficial, non-commercial, MIT-licensed code.
 
-**Live:** https://apex.shadster.dev (generated data: https://cdn.shadster.dev/f1-sim/) · Architecture, schema & pipeline: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+**Live:** https://apex.shadster.dev · Architecture & data schema: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)
+
+## How it works
 
 ```
-pipeline/   Python: FastF1 → RaceBundle generator (+ container service & pull agent)
-worker/     Cloudflare Worker: API, SeasonJobs Durable Object, Workflow, Container class, static app
-web/        React + TypeScript + Vite + React Three Fiber client
-docs/       Architecture
+pipeline/   Python: FastF1 + OpenStreetMap + terrain tiles → race & circuit files (JSON / binary)
+worker/     Cloudflare Worker: API, job state, serves the app; asks GitHub Actions to generate missing races
+web/        React + TypeScript + Vite + React Three Fiber renderer
+.github/    CI, pipeline-output diff for PRs, the generator workflow, deploy
 ```
 
-## Develop
+A race is **not a video**. It is a set of generated data files that the browser renders live. Those files are
+**build output**: a rebuildable cache stored in Cloudflare R2, **never committed** to this repo. The repo holds the
+pipeline, the schema and the renderer.
+
+1. Open an ungenerated race → the Worker checks it exists in the catalog and dispatches the **Generate race**
+   GitHub Actions workflow (one build per race, however many people click).
+2. The workflow runs the pipeline and uploads the files to R2; the page shows progress, then plays the race.
+3. Data is versioned, so improving the pipeline never breaks the site:
+
+| Version | Meaning | When it changes |
+|---|---|---|
+| `schemaVersion` | the format the renderer reads | renderer + pipeline change **in the same PR**. Old-schema files are regenerated before being served. |
+| `pipelineVersion` | how race telemetry was generated | an old file is served immediately while a **background rebuild** runs ("newer data loading" in the UI). No regenerate button. |
+| `circuitVersion` | how circuit/terrain/buildings were generated | the circuit is rebuilt; the race telemetry is **reused** if the line geometry is unchanged (`lineHash`). |
+
+Circuit/environment data is one set of files per track; race telemetry is one bundle per session.
+The footer shows the data version and generation date.
+
+## Run it locally (no keys needed)
 
 ```bash
-npm install                                   # web + worker workspaces
-cd pipeline && uv venv -p 3.12 .venv && uv pip install -p .venv/bin/python -e .
+npm install
+cd pipeline && python3.12 -m venv .venv && .venv/bin/pip install -e '.[dev]' && cd ..
 
-# generate a race locally into ./out (no upload)
-F1SIM_CACHE=$PWD/../.cache .venv/bin/python -m f1sim.generate --season 2024 --round 21 --out ../out --no-upload
+# renderer only: develop against the public data (no pipeline run, no keys)
+VITE_DATA_BASE=https://cdn.shadster.dev/f1-sim/ npm run dev      # http://localhost:5173
 
-# run the app against ./out (served at /data by the Vite dev plugin)
-cd ../web && npx vite                         # http://localhost:5173/race/2024/21
+# pipeline: generate a race yourself into ./out (public sources only, nothing is uploaded)
+cd pipeline && .venv/bin/python -m f1sim.generate --year 2024 --race monza && cd ..
+npm run dev                       # dev serves ./out at /data by default; open /race/2024/16
 ```
 
-Useful dev scripts (headless GPU screenshots): `web/scripts/views.mjs`, `car.mjs`, `scenario.mjs`.
-`window.__f1` exposes `{ rt, ui }` for automation.
+`--race` takes a round number or a name fragment. Tests: `python -m pytest pipeline/tests`; types: `npm run typecheck`.
 
-## Generate & publish
+> **Data availability.** Since mid-October 2026 Formula 1's timing archive requires authentication, which
+> breaks anonymous FastF1 downloads (see [`docs/OPERATIONS.md`](docs/OPERATIONS.md#data-availability)). Races
+> already in your FastF1 cache still generate; new ones need an authenticated FastF1 session.
 
-Credentials come from the environment only (never committed): `R2_ENDPOINT_URL`, `AWS_ACCESS_KEY_ID`,
-`AWS_SECRET_ACCESS_KEY`, `R2_BUCKET=cdn`, `R2_PREFIX=f1-sim`.
+## Contributing
 
-```bash
-set -a; source ~/.config/shadster/r2.env; set +a
-export R2_BUCKET=cdn R2_PREFIX=f1-sim
-.venv/bin/python -m f1sim.generate --season 2024 --round 21     # publishes to cdn.shadster.dev/f1-sim/
-.venv/bin/python -m f1sim.catalog --season 2024                 # gallery catalog
-```
-
-### On-demand generation (selecting an ungenerated race in the app)
-
-The Worker queues the job in the `SeasonJobs` Durable Object. Two executors are supported:
-
-* **Agent mode (active).** Run one or more agents anywhere with outbound HTTPS:
-  ```bash
-  set -a; source ~/.config/shadster/r2.env; source ~/.config/f1sim/agent.env; set +a
-  export R2_BUCKET=cdn R2_PREFIX=f1-sim
-  .venv/bin/python -m f1sim.agent --api https://apex.shadster.dev/api     # add --once to drain & exit
-  ```
-  `F1SIM_AGENT_TOKEN` must match the Worker secret `AGENT_TOKEN`.
-* **Container mode.** Requires the Cloudflare **Workers Paid** plan: uncomment `containers` in
-  `worker/wrangler.jsonc`, set `GENERATOR_MODE` to `"container"`, add the R2 secrets
-  (`R2_ENDPOINT_URL`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`) and deploy. The Workflow
-  then drives `pipeline/Dockerfile` in a Cloudflare Container.
-
-## Deploy
-
-```bash
-cd web && npx vite build && cd ../worker && npx wrangler deploy
-```
-
-`apex.shadster.dev` is a Worker custom domain (app + API); artifacts are served straight from R2 at `cdn.shadster.dev/f1-sim/`.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). PRs run type checks, tests and a **pipeline output diff** on sample
+races so pipeline changes are visible before merge. Fork PRs never receive secrets.
+Running your own deployment: [`docs/OPERATIONS.md`](docs/OPERATIONS.md).
 
 ## Adding a circuit
 
