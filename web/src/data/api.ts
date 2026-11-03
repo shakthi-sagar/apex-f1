@@ -28,12 +28,6 @@ export async function getStatus(season: number, round: number): Promise<RaceStat
   return null
 }
 
-export async function requestGeneration(season: number, round: number): Promise<RaceStatus> {
-  const r = await fetch(`${API_BASE}/races/${season}/${round}/generate`, { method: 'POST' })
-  if (!r.ok) throw new Error(`Generation request failed (${r.status})`)
-  return (await r.json()) as RaceStatus
-}
-
 export async function loadManifest(season: number, round: number): Promise<Manifest | null> {
   try {
     const m = await fetchJson<Manifest>(dataUrl(`races/${season}/${String(round).padStart(2, '0')}/manifest.json`), { cache: 'no-cache' })
@@ -42,16 +36,6 @@ export async function loadManifest(season: number, round: number): Promise<Manif
   } catch {
     return null
   }
-}
-
-export interface GeneratorStatus { mode: 'agent' | 'container'; online: boolean; agents: number; busy: string[]; lastSeen: number | null }
-
-export async function getGenerator(): Promise<GeneratorStatus | null> {
-  try {
-    const r = await fetch(`${API_BASE}/generator`, { cache: 'no-store' })
-    if (r.ok) return (await r.json()) as GeneratorStatus
-  } catch { /* API unreachable */ }
-  return null
 }
 
 export async function getSeasons(): Promise<number[]> {

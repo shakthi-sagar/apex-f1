@@ -1,50 +1,5 @@
 import type { LoadProgress } from '../data/loadRace'
-import type { JobState, Manifest, RaceStatus } from '../data/types'
-import { lastSeenText, useGenerator } from '../lib/useGenerator'
-import { GeneratorPill } from './GeneratorPill'
-
-const STAGES: { k: JobState; label: string }[] = [
-  { k: 'queued', label: 'Queued' },
-  { k: 'generating_fastf1', label: 'Fetching timing & telemetry (FastF1)' },
-  { k: 'generating_circuit', label: 'Reconstructing the circuit' },
-  { k: 'enriching_osm', label: 'Building the world (OpenStreetMap, terrain)' },
-  { k: 'processing', label: 'Motion fusion, gaps & race events' },
-  { k: 'uploading', label: 'Publishing RaceBundle' },
-]
-
-export function GenerationScreen({ season, round, status }: { season: number; round: number; status: RaceStatus }) {
-  const gen = useGenerator(8000)
-  const idx = Math.max(0, STAGES.findIndex((s) => s.k === status.state))
-  const frac = (idx + (status.progress ?? 0)) / STAGES.length
-  return (
-    <div className="loading">
-      <div className="card">
-        <Logo />
-        <h1>Preparing this race</h1>
-        <p className="sub">{season} · ROUND {round} — processed once, then replayed instantly for everyone</p>
-        <div className="progress"><i style={{ width: `${Math.max(3, frac * 100)}%` }} /></div>
-        <div className="sub" style={{ fontSize: 12 }}>{status.message ?? 'Starting…'}</div>
-        {gen && !gen.online && (
-          <div className="gen-offline">
-            <GeneratorPill g={gen} />
-            <span>The generator is offline (last seen {lastSeenText(gen.lastSeen)}). Your request is queued and will start automatically when it comes back online.</span>
-          </div>
-        )}
-        {gen?.online && <div style={{ marginTop: 14 }}><GeneratorPill g={gen} /></div>}
-        <div className="stages">
-          {STAGES.map((s, i) => (
-            <div key={s.k} className={`stage ${i < idx ? 'done' : i === idx ? 'active' : ''}`}>
-              <span className="ic" />
-              <span>{s.label}</span>
-              <span className="tnum" style={{ fontSize: 11 }}>{i === idx && status.progress != null ? `${Math.round(status.progress * 100)}%` : ''}</span>
-            </div>
-          ))}
-        </div>
-        <p className="sub" style={{ fontSize: 11, marginTop: 26, opacity: .7 }}>You can leave this page — generation continues in the background.</p>
-      </div>
-    </div>
-  )
-}
+import type { Manifest } from '../data/types'
 
 export function LoadingScreen({ manifest, progress }: { manifest: Manifest | null; progress: LoadProgress }) {
   return (

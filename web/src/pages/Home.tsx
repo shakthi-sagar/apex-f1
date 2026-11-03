@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
 import { getCatalog, getSeasons, getStatuses, loadManifest } from '../data/api'
-import { useGenerator } from '../lib/useGenerator'
-import { GeneratorPill } from '../ui/GeneratorPill'
 import type { CatalogRace, RaceStatus } from '../data/types'
 import { navigate } from '../lib/router'
 import { Logo } from '../ui/Screens'
@@ -15,7 +13,6 @@ export function Home() {
   const [seasons, setSeasons] = useState<number[]>([2024])
   const [season, setSeason] = useState(() => Number(new URLSearchParams(location.search).get('season')) || 2024)
   const [featuredCat, setFeaturedCat] = useState<CatalogRace[]>([])
-  const gen = useGenerator()
   useEffect(() => { getSeasons().then(setSeasons); getCatalog(FEATURED.season).then(setFeaturedCat).catch(() => {}) }, [])
   const pickSeason = (y: number) => {
     if (y === season) return
@@ -51,9 +48,7 @@ export function Home() {
       }
       if (!alive) return
       setStatus(st)
-      // poll quickly only while something is actually being generated
-      const active = Object.values(st).some((x) => x && x.state !== 'ready' && x.state !== 'failed' && x.state !== 'unavailable')
-      schedule(active ? 10_000 : 60_000)
+      schedule(60_000)
     }
     const schedule = (ms: number) => { if (alive) timer = setTimeout(refresh, ms) }
     const onVisible = () => { if (!document.hidden) { clearTimeout(timer); refresh() } }
@@ -70,7 +65,7 @@ export function Home() {
       <header className="home-nav">
         <div className="home-brand"><Logo size={34} /><span>APEX</span><em>Race Replays</em></div>
         <nav>
-          <GeneratorPill g={gen} />
+          <a className="notice-pill" href="https://github.com/shakthi-sagar/apex-f1/blob/main/DISCONTINUED.md" target="_blank" rel="noreferrer" title="Why new races can’t be generated">Discontinued · no new races</a>
         </nav>
       </header>
 
@@ -116,14 +111,15 @@ export function Home() {
         <div className="races-head">
           <h2>{season} Season</h2>
           <p>
-            Races marked <span className="dot ready" /> are ready to watch instantly. Others are generated on first request — once, then cached for everyone.
-            {gen && !gen.online && <><br /><b className="warn">The generator is offline right now</b> — new requests are queued and start automatically when it’s back.</>}
+            Races marked <span className="dot ready" /> are ready to watch instantly.
+            <br /><b className="warn">New races can no longer be generated</b> — Formula 1 now requires authentication for its timing data, so this project is discontinued.{' '}
+            <a href="https://github.com/shakthi-sagar/apex-f1/blob/main/DISCONTINUED.md" target="_blank" rel="noreferrer">Read why</a>
           </p>
         </div>
         {err && <p className="dim">Couldn’t load the calendar: {err}</p>}
         <div className="grid">
           {(races ?? Array.from({ length: 12 }, () => null)).map((r, i) =>
-            r ? <RaceCard key={r.round} r={r} st={status[r.round]} genOnline={gen?.online ?? true} onOpen={() => open(r)} /> : <div key={i} className="card skeleton" />,
+            r ? <RaceCard key={r.round} r={r} st={status[r.round]} onOpen={() => open(r)} /> : <div key={i} className="card skeleton" />,
           )}
         </div>
       </section>
@@ -136,14 +132,12 @@ export function Home() {
   )
 }
 
-function RaceCard({ r, st, genOnline, onOpen }: { r: CatalogRace; st?: RaceStatus; genOnline: boolean; onOpen: () => void }) {
-  const state = st?.state ?? 'unavailable'
-  const ready = state === 'ready'
-  const busy = !ready && state !== 'unavailable' && state !== 'failed'
+function RaceCard({ r, st, onOpen }: { r: CatalogRace; st?: RaceStatus; onOpen: () => void }) {
+  const ready = st?.state === 'ready'
   const color = r.winner?.color ?? '#888'
   const date = new Date(r.date + 'T12:00:00Z').toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
   return (
-    <button className={`card ${ready ? 'is-ready' : ''}`} onClick={onOpen} disabled={r.unavailable} style={{ ['--team' as string]: color }} title={r.unavailable ? 'Race not run yet / no data' : undefined}>
+    <button className={`card ${ready ? 'is-ready' : ''}`} onClick={onOpen} disabled={!ready} style={{ ['--team' as string]: color }} title={ready ? undefined : 'Not available — new races can no longer be generated'}>
       <div className="card-top">
         <span className="rnd">R{String(r.round).padStart(2, '0')}</span>
         <span className="date">{date}</span>
@@ -169,18 +163,10 @@ function RaceCard({ r, st, genOnline, onOpen }: { r: CatalogRace; st?: RaceStatu
       </div>
       <div className="card-foot">
         {ready && <span className="status ready"><span className="dot ready" />Ready to watch</span>}
-        {busy && !genOnline && <span className="status queued">Queued · waiting for generator</span>}
-        {busy && genOnline && <span className="status busy"><span className="spinner" />Generating{st?.progress != null ? ` · ${Math.round(((stageIndex(state) + (st.progress ?? 0)) / 6) * 100)}%` : ''}</span>}
-        {state === 'failed' && <span className="status failed">Generation failed · retry</span>}
-        {state === 'unavailable' && (genOnline ? <span className="status">Generate replay →</span>
-          : <span className="status queued" title="The generator is offline; your request will be queued">Queue replay (generator offline)</span>)}
+        {!ready && <span className="status">Not available</span>}
       </div>
     </button>
   )
-}
-
-function stageIndex(s: string) {
-  return ['queued', 'generating_fastf1', 'generating_circuit', 'enriching_osm', 'processing', 'uploading'].indexOf(s)
 }
 
 function HeroTrace({ d }: { d: string }) {
