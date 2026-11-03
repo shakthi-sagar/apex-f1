@@ -9,3 +9,8 @@ out/
 .dev.vars
 *.env
 .env*
+*.tsbuildinfo
+.secrets/
+*.secrets
+agent.env
+r2.env

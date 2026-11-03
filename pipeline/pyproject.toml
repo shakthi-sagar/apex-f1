@@ -15,5 +15,13 @@ dependencies = [
   "mapbox-earcut",
 ]
 
+[project.scripts]
+f1sim-generate = "f1sim.generate:main"
+f1sim-catalog = "f1sim.catalog:main"
+f1sim-agent = "f1sim.agent:main"
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
 [tool.setuptools.packages.find]
 include = ["f1sim*"]

@@ -1,6 +1,6 @@
 """Season catalog for the race gallery: schedule, winner, circuit outline preview.
 
-    python -m f1sim.catalog --season 2024 [--out ./out] [--no-upload]
+    python -m f1sim.catalog --year 2024 [--out ./out] [--upload]
 
 Outlines come from each race's fastest lap (FastF1 position data), rotated by
 the official circuit-map rotation and normalised to a 1000x1000 SVG viewBox.
@@ -12,10 +12,11 @@ import argparse
 import json
 import logging
 import os
+from datetime import datetime, timezone
 
 import numpy as np
 
-from . import binfmt
+from . import PIPELINE_VERSION, SCHEMA_VERSION, binfmt
 from .ingest.fastf1_source import enable_cache
 from .liveries import team_id
 from .storage import SHORT, Store
@@ -87,20 +88,21 @@ def build(season: int, cache_root: str) -> dict:
             entry["unavailable"] = True
         races.append(entry)
         log.info("catalog %d/%d %s", rnd, len(sched), entry["name"])
-    return {"season": season, "races": races}
+    return {"schemaVersion": SCHEMA_VERSION, "pipelineVersion": PIPELINE_VERSION,
+            "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"), "season": season, "races": races}
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--season", type=int, required=True)
-    ap.add_argument("--out", default=None)
-    ap.add_argument("--no-upload", action="store_true")
+    ap.add_argument("--year", "--season", dest="season", type=int, required=True)
+    ap.add_argument("--out", default="out", help="local output directory (default ./out)")
+    ap.add_argument("--upload", action="store_true", help="also upload to R2 (needs R2_* env vars; CI only)")
     a = ap.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     logging.getLogger("fastf1").setLevel(logging.ERROR)
     cache_root = os.environ.get("F1SIM_CACHE", os.path.expanduser("~/.cache/f1sim"))
     cat = build(a.season, cache_root)
-    store = Store(local_root=a.out, upload=not a.no_upload)
+    store = Store(local_root=a.out, upload=a.upload)
     store.put(f"catalog/{a.season}.json", binfmt.gz_json(cat), "application/json", gzip=True, cache=SHORT)
     print(json.dumps({"races": len(cat["races"])}))
 

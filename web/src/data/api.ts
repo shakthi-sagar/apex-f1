@@ -1,4 +1,5 @@
 import { API_BASE, dataUrl, fetchJson } from './fetch'
+import { SCHEMA_VERSION } from './version'
 import type { CatalogRace, Manifest, RaceStatus } from './types'
 
 export async function getCatalog(season: number): Promise<CatalogRace[]> {
@@ -35,7 +36,9 @@ export async function requestGeneration(season: number, round: number): Promise<
 
 export async function loadManifest(season: number, round: number): Promise<Manifest | null> {
   try {
-    return await fetchJson<Manifest>(dataUrl(`races/${season}/${String(round).padStart(2, '0')}/manifest.json`), { cache: 'no-cache' })
+    const m = await fetchJson<Manifest>(dataUrl(`races/${season}/${String(round).padStart(2, '0')}/manifest.json`), { cache: 'no-cache' })
+    // another schema = a file this renderer cannot read: treat as missing so it regenerates before being served
+    return (m.schemaVersion ?? 1) === SCHEMA_VERSION ? m : null
   } catch {
     return null
   }

@@ -63,7 +63,7 @@ export function Hud({ rt }: { rt: RaceRuntime }) {
         {!duel && <Transport rt={rt} />}
       </div>
       <div className="attrib hud-keep">
-        Data: FastF1 (unofficial) · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> · Terrain: Mapzen/AWS · Press <span className="kbd">H</span> to hide HUD
+        Data: FastF1 (unofficial) · Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap contributors</a> · Terrain: Mapzen/AWS · Data v{rt.data.manifest.schemaVersion ?? 1}.{rt.data.manifest.pipelineVersion} · {rt.data.manifest.generatedAt.slice(0, 10)} · Press <span className="kbd">H</span> to hide HUD
       </div>
     </div>
   )

@@ -123,6 +123,7 @@ export interface RaceJson {
 
 export interface Manifest {
   schema: string
+  schemaVersion?: number
   season: number
   round: number
   pipelineVersion: number
@@ -183,4 +184,7 @@ export interface RaceStatus {
   updatedAt?: string
   manifest?: Manifest | null
   error?: string
+  /** ready but built by an older pipeline: served as-is while a background rebuild runs */
+  stale?: boolean
+  rebuilding?: boolean
 }

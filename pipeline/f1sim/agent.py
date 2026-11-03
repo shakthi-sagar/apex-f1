@@ -1,6 +1,7 @@
 """Pull-based generator agent.
 
     F1SIM_AGENT_TOKEN=... python -m f1sim.agent --api https://apex.shadster.dev/api
+    F1SIM_AGENT_TOKEN=... python -m f1sim.agent --season 2024 --round 21     # one race, then exit (GitHub Actions)
 
 Polls the Worker for queued race jobs, runs the pipeline locally and streams stage
 progress back. Needs only outbound HTTPS (plus R2 credentials for uploads), so it runs on
@@ -66,6 +67,21 @@ class Reporter:
         self.post(**self.fields)
 
 
+def run_one(api: str, token: str, season: int, rnd: int, cache_root: str) -> bool:
+    """Generate exactly one race (GitHub Actions: the Worker dispatched this run), reporting progress to the Worker."""
+    rep = Reporter(api, token, season, rnd)
+    try:
+        manifest = generate(season, rnd, Store(local_root=None, upload=True), progress=rep.progress, cache_root=cache_root)
+        rep.post(state="ready", stage="ready", progress=1.0, message="Ready", manifest=manifest)
+        return True
+    except Exception as e:  # noqa: BLE001
+        log.error("job failed: %s", traceback.format_exc())
+        rep.post(state="failed", stage="failed", message="Generation failed", error=f"{type(e).__name__}: {e}")
+        return False
+    finally:
+        rep.close()
+
+
 def _seasons(api: str, fixed: str, cache: dict) -> str:
     """Explicit --seasons, else every season with a published catalog (refreshed every 10 min)."""
     if fixed:
@@ -114,13 +130,18 @@ def main():
     ap.add_argument("--api", default=os.environ.get("F1SIM_API", "https://apex.shadster.dev/api"))
     ap.add_argument("--seasons", default="", help="comma list; default: every season with a catalog")
     ap.add_argument("--once", action="store_true", help="exit when the queue is empty")
+    ap.add_argument("--season", type=int, help="run exactly this race, then exit (with --round)")
+    ap.add_argument("--round", type=int)
     a = ap.parse_args()
     token = os.environ.get("F1SIM_AGENT_TOKEN")
     if not token:
         raise SystemExit("F1SIM_AGENT_TOKEN is required")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     logging.getLogger("fastf1").setLevel(logging.WARNING)
-    run(a.api.rstrip("/"), token, a.seasons, a.once, os.environ.get("F1SIM_CACHE", os.path.expanduser("~/.cache/f1sim")))
+    cache_root = os.environ.get("F1SIM_CACHE", os.path.expanduser("~/.cache/f1sim"))
+    if a.season and a.round:
+        raise SystemExit(0 if run_one(a.api.rstrip("/"), token, a.season, a.round, cache_root) else 1)
+    run(a.api.rstrip("/"), token, a.seasons, a.once, cache_root)
 
 
 if __name__ == "__main__":

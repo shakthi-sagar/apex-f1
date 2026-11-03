@@ -24,12 +24,26 @@ export interface Env {
   GENERATOR: DurableObjectNamespace<Generator>
   GENERATE: Workflow<GenerateParams>
   R2_PREFIX: string
+  /** Versions this deploy expects (must match pipeline/f1sim/__init__.py; pipeline/tests/test_versions.py enforces it). */
+  SCHEMA_VERSION: string
   PIPELINE_VERSION: string
+  CIRCUIT_VERSION: string
+  CDN_HOST: string
   MAX_CONCURRENT_JOBS: string
-  /** "container": Workflow drives a Cloudflare Container (Workers Paid).
+  /** "github": dispatch the generate.yml GitHub Actions workflow (no machine of yours needs to be on).
+   *  "container": Workflow drives a Cloudflare Container (Workers Paid).
    *  "agent": generator agents pull queued jobs over HTTPS (works anywhere, no inbound ports). */
-  GENERATOR_MODE: 'container' | 'agent'
+  GENERATOR_MODE: 'github' | 'container' | 'agent'
+  /** Shared secret for /api/agent/* (agents and the GitHub Actions runner report progress with it). */
   AGENT_TOKEN: string
+  // github mode: `wrangler secret put GITHUB_DISPATCH_TOKEN` — fine-grained PAT, this repo only, "Actions: write"
+  GITHUB_DISPATCH_TOKEN: string
+  GITHUB_REPO: string // owner/name
+  GITHUB_WORKFLOW: string // e.g. generate.yml
+  GITHUB_REF: string // branch the workflow runs from (main)
+  DAILY_DISPATCH_CAP: string
+  /** Optional Workers rate-limit binding (see wrangler.jsonc); absent in local dev. */
+  GEN_LIMITER?: RateLimit
   // secrets (wrangler secret put) — passed to the container only
   R2_ENDPOINT_URL: string
   R2_ACCESS_KEY_ID: string
@@ -58,6 +72,7 @@ interface GenerateParams { season: number; round: number }
 
 const ACTIVE: JobState[] = ['queued', 'generating_fastf1', 'generating_circuit', 'enriching_osm', 'processing', 'uploading']
 const STALE_MS = 25 * 60 * 1000
+const BACKOFF_MS = 60 * 60 * 1000 // background rebuilds: at most one attempt per race per hour
 const BASE = '/f1-sim'
 
 // ------------------------------------------------------------------------------------------ container
@@ -78,6 +93,23 @@ export class Generator extends Container<Env> {
       R2_PREFIX: env.R2_PREFIX,
     }
   }
+}
+
+// ------------------------------------------------------------------------------------------ github
+/** Trigger generate.yml. Its `concurrency: race-{season}-{round}` group makes simultaneous dispatches run one build. */
+async function dispatchWorkflow(env: Env, season: number, round: number): Promise<void> {
+  if (!env.GITHUB_DISPATCH_TOKEN || !env.GITHUB_REPO) throw new Error('GitHub dispatch is not configured')
+  const res = await fetch(`https://api.github.com/repos/${env.GITHUB_REPO}/actions/workflows/${env.GITHUB_WORKFLOW || 'generate.yml'}/dispatches`, {
+    method: 'POST',
+    headers: {
+      authorization: `Bearer ${env.GITHUB_DISPATCH_TOKEN}`,
+      accept: 'application/vnd.github+json',
+      'x-github-api-version': '2022-11-28',
+      'user-agent': 'apex-f1-worker',
+    },
+    body: JSON.stringify({ ref: env.GITHUB_REF || 'main', inputs: { season: String(season), round: String(round) } }),
+  })
+  if (res.status !== 204) throw new Error(`GitHub responded ${res.status}`)
 }
 
 // ------------------------------------------------------------------------------------------ job registry
@@ -102,10 +134,16 @@ export class SeasonJobs extends DurableObject<Env> {
     return out
   }
 
-  /** Idempotent start. Single-threaded DO => concurrent callers can never double-launch. */
-  async start(season: number, round: number): Promise<Job> {
+  /** Idempotent start. Single-threaded DO => concurrent callers can never double-launch.
+   *  `background` = a stale-while-rebuild trigger (nobody clicked "generate"): it backs off after a
+   *  failure and after a rebuild that did not clear the stale flag, so it can never loop. */
+  async start(season: number, round: number, background = false): Promise<Job> {
     const cur = await this.status(round)
     if (ACTIVE.includes(cur.state)) return cur
+    if (background && (cur.state === 'failed' || cur.state === 'ready') && Date.now() - cur.updatedAt < BACKOFF_MS) return cur
+    if (this.env.GENERATOR_MODE === 'github' && !(await this.underDailyCap())) {
+      return { ...cur, state: 'failed', error: 'Daily generation limit reached — try again tomorrow', updatedAt: Date.now() }
+    }
     const active = Object.values(await this.all()).filter((j) => ACTIVE.includes(j.state) && Date.now() - j.updatedAt < STALE_MS)
     const attempts = (cur.attempts ?? 0) + 1
     const id = `race-${season}-${round}-${Date.now()}`
@@ -116,11 +154,29 @@ export class SeasonJobs extends DurableObject<Env> {
     if (this.env.GENERATOR_MODE === 'container') {
       await this.ctx.storage.put(`r${round}`, job)
       await this.env.GENERATE.create({ id, params: { season, round } })
+    } else if (this.env.GENERATOR_MODE === 'github') {
+      job.message = 'Starting a generator run'
+      await this.ctx.storage.put(`r${round}`, job)
+      try {
+        await dispatchWorkflow(this.env, season, round)
+      } catch (e) {
+        job.state = 'failed'
+        job.error = `Could not start generation: ${(e as Error).message}`
+        await this.ctx.storage.put(`r${round}`, job)
+      }
     } else {
       job.message = 'Waiting for a generator agent'
       await this.ctx.storage.put(`r${round}`, job)
     }
     return job
+  }
+
+  private async underDailyCap(): Promise<boolean> {
+    const key = `cap:${new Date().toISOString().slice(0, 10)}`
+    const n = ((await this.ctx.storage.get<number>(key)) ?? 0) + 1
+    if (n > Number(this.env.DAILY_DISPATCH_CAP || 150)) return false
+    await this.ctx.storage.put(key, n)
+    return true
   }
 
   /** Agent mode: hand the oldest queued (or abandoned) job to an agent. */
@@ -201,6 +257,12 @@ export class GenerateRaceWorkflow extends WorkflowEntrypoint<Env, GenerateParams
 const json = (obj: unknown, status = 200, cache = 'no-store') =>
   new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json', 'cache-control': cache } })
 
+/** Constant-time string compare (timingSafeEqual needs equal lengths, so hash first). */
+async function sameSecret(a: string, b: string): Promise<boolean> {
+  const h = async (x: string) => new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(x)))
+  return crypto.subtle.timingSafeEqual(await h(a), await h(b))
+}
+
 function pad(r: number) { return String(r).padStart(2, '0') }
 
 async function readJson<T>(env: Env, key: string): Promise<T | null> {
@@ -211,12 +273,16 @@ async function readJson<T>(env: Env, key: string): Promise<T | null> {
   return JSON.parse(await new Response(stream).text()) as T
 }
 
-interface Manifest { pipelineVersion: number; bundle: string; circuit: string }
+interface Manifest { schemaVersion?: number; pipelineVersion: number; circuitVersion?: number; bundle: string; circuit: string }
 
+/** A manifest with a different schema is unreadable by this renderer, so it counts as missing and must
+ *  regenerate before being served. An older pipeline/circuit version is merely stale: still served,
+ *  rebuilt in the background. (Manifests written before schemaVersion existed are schema 1.) */
 async function manifestFor(env: Env, season: number, round: number) {
   const m = await readJson<Manifest>(env, `races/${season}/${pad(round)}/manifest.json`)
-  if (!m) return null
-  return { manifest: m, current: m.pipelineVersion >= Number(env.PIPELINE_VERSION) }
+  if (!m || (m.schemaVersion ?? 1) !== Number(env.SCHEMA_VERSION)) return null
+  const current = m.pipelineVersion >= Number(env.PIPELINE_VERSION) && (m.circuitVersion ?? 0) >= Number(env.CIRCUIT_VERSION)
+  return { manifest: m, current }
 }
 
 async function catalogRound(env: Env, season: number, round: number) {
@@ -230,7 +296,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 
   // ---- generator agents (pull model): authenticated with AGENT_TOKEN
   if (parts[1] === 'agent') {
-    if (!env.AGENT_TOKEN || req.headers.get('authorization') !== `Bearer ${env.AGENT_TOKEN}`) return json({ error: 'unauthorized' }, 401)
+    if (!env.AGENT_TOKEN || !(await sameSecret(req.headers.get('authorization') ?? '', `Bearer ${env.AGENT_TOKEN}`))) return json({ error: 'unauthorized' }, 401)
     const url = new URL(req.url)
     const presence = env.JOBS.get(env.JOBS.idFromName('agents'))
     if (parts[2] === 'next' && req.method === 'POST') {
@@ -245,6 +311,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
     }
     if (parts[2] === 'progress' && req.method === 'POST') {
       const b = (await req.json()) as Partial<Job> & { season: number; round: number; agent?: string }
+      if (!Number.isInteger(b.season) || !Number.isInteger(b.round)) return json({ error: 'bad request' }, 400)
       const done = b.state === 'ready' || b.state === 'failed'
       await presence.agentSeen((b.agent || 'agent').slice(0, 40), done ? null : `${b.season}/${b.round}`)
       await jobsFor(b.season).update(b.round, {
@@ -303,18 +370,24 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
   if (parts[1] === 'races' && parts.length >= 4) {
     const season = Number(parts[2]), round = Number(parts[3])
     if (!Number.isInteger(season) || !Number.isInteger(round)) return json({ error: 'bad request' }, 400)
+    // Only races in the catalog ever reach a Durable Object or GitHub: arbitrary ids are rejected up front.
+    const cr = await catalogRound(env, season, round)
+    if (!cr || cr.unavailable) return json({ state: 'failed', error: 'Race not in catalog' }, 404)
     const m = await manifestFor(env, season, round)
+    const allowed = async () => !env.GEN_LIMITER || (await env.GEN_LIMITER.limit({ key: req.headers.get('cf-connecting-ip') ?? 'anon' })).success
     if (parts[4] === 'generate' && req.method === 'POST') {
       if (m?.current) return json({ state: 'ready', manifest: m.manifest })
-      const cr = await catalogRound(env, season, round)
-      if (!cr || cr.unavailable) return json({ state: 'failed', error: 'Race not in catalog' }, 404)
       if (Date.parse(cr.date) > Date.now() - 36 * 3600e3) return json({ state: 'failed', error: 'Race has not happened yet' }, 409)
+      if (!(await allowed())) return json({ state: 'failed', error: 'Too many requests — slow down' }, 429)
       const job = await jobsFor(season).start(season, round)
       return json(job, 202)
     }
     if (req.method === 'GET') {
-      if (m) return json({ state: 'ready', manifest: m.manifest, stale: !m.current })
-      return json(await jobsFor(season).status(round))
+      if (!m) return json(await jobsFor(season).status(round))
+      if (m.current) return json({ state: 'ready', manifest: m.manifest, stale: false })
+      // Stale-while-rebuild: serve the old file now, rebuild in the background (no regenerate button).
+      const job = (await (await allowed() ? jobsFor(season).start(season, round, true) : jobsFor(season).status(round))) as unknown as Job
+      return json({ state: 'ready', manifest: m.manifest, stale: true, rebuilding: ACTIVE.includes(job.state), rebuild: { state: job.state, progress: job.progress, message: job.message } })
     }
   }
   return json({ error: 'not found' }, 404)
@@ -323,7 +396,7 @@ async function api(req: Request, env: Env, path: string): Promise<Response> {
 async function artifact(req: Request, env: Env, key: string): Promise<Response> {
   // On the cdn.shadster.dev route the R2 custom domain is our origin: pass through (edge-cached).
   const url = new URL(req.url)
-  if (url.hostname === 'cdn.shadster.dev') return fetch(req)
+  if (url.hostname === env.CDN_HOST) return fetch(req)
   const obj = await env.BUCKET.get(`${env.R2_PREFIX}/${key}`)
   if (!obj) return new Response('not found', { status: 404 })
   const h = new Headers()
@@ -338,7 +411,7 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url)
     // the CDN hostname is a pure R2 asset host — never handle it here (stale routes pass straight to origin)
-    if (url.hostname === 'cdn.shadster.dev') return fetch(req)
+    if (url.hostname === env.CDN_HOST) return fetch(req)
     if (url.pathname === BASE || url.pathname.startsWith(`${BASE}/`)) {
       const rest = url.pathname.slice(BASE.length) || '/'
       return Response.redirect(`${url.origin}${rest}${url.search}`, 301)

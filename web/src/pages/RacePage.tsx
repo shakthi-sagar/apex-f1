@@ -4,6 +4,7 @@ import { loadRace, type LoadProgress, type LoadedRace } from '../data/loadRace'
 import type { Manifest, RaceStatus } from '../data/types'
 import { RaceRuntime } from '../replay/runtime'
 import { RaceScene } from '../scene/RaceScene'
+import { DataNote } from '../ui/DataNote'
 import { Hud } from '../ui/Hud'
 import { GenerationScreen, LoadingScreen } from '../ui/Screens'
 import { useUI } from '../state/ui'
@@ -76,6 +77,7 @@ export default function RacePage({ season, round }: { season: number; round: num
       <>
         <RaceScene rt={rt} />
         <Hud rt={rt} />
+        <DataNote manifest={phase.data.manifest} />
       </>
     )
   }

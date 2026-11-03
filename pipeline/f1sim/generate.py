@@ -1,6 +1,6 @@
 """RaceBundle generation orchestrator.
 
-    python -m f1sim.generate --season 2024 --round 21 [--out ./out] [--no-upload]
+    python -m f1sim.generate --year 2024 --race monza        # writes ./out, no credentials needed
 
 Stages (reported through `progress(stage, fraction, message)`):
   generating_fastf1 -> generating_circuit -> enriching_osm -> processing -> uploading -> ready
@@ -24,7 +24,7 @@ from typing import Callable
 
 import numpy as np
 
-from . import BUNDLE_SCHEMA, CIRCUIT_VERSION, PIPELINE_VERSION, binfmt, environment, liveries
+from . import BUNDLE_SCHEMA, CIRCUIT_VERSION, PIPELINE_VERSION, SCHEMA_VERSION, binfmt, environment, liveries
 from .circuit import registry
 from .circuit.build import Circuit, build_circuit
 from .circuit.path import ClosedPath
@@ -87,6 +87,8 @@ def _circuit_to_bin(circ: Circuit, reg: Registration, frame: LocalFrame, cfg: di
         "name": raw.circuit_name,
         "layout": cfg["layout"],
         "version": CIRCUIT_VERSION,
+        "schemaVersion": SCHEMA_VERSION,
+        "pipelineVersion": PIPELINE_VERSION,
         "length": p.length,
         "ds": p.ds,
         "origin": frame.to_json(),
@@ -151,9 +153,37 @@ def _world_to_bin(world) -> bytes:
     return binfmt.pack(arrays, meta)
 
 
+
+def _line_hash(circ: Circuit, racing_line: np.ndarray) -> str:
+    """Fingerprint of everything race telemetry is fused against (line, edges, pit lane, corners, sectors).
+    Terrain / buildings / trees / barriers are deliberately excluded: an environment change must not
+    force telemetry regeneration. Float32 + 0.1 m rounding makes it identical whether the circuit was
+    just built (float64) or loaded back from circuit.bin (float32)."""
+    h = hashlib.sha256()
+    def q(a):  # points (N, 3) -> xy; per-sample scalars (N,) as-is
+        a = np.asarray(a, np.float32)
+        return np.round((a[:, :2] if a.ndim == 2 else a).astype(np.float64), 1).tobytes()
+
+    for a in (circ.path.pts, circ.left, circ.right, racing_line):
+        h.update(q(a))
+    if circ.pit.get("available"):
+        h.update(np.round(np.asarray(circ.pit["s"], np.float32).astype(np.float64), 1).tobytes())
+        h.update(np.round(np.asarray(circ.pit["d"], np.float32).astype(np.float64), 1).tobytes())
+    h.update(json.dumps([round(float(circ.path.length), 1), circ.corners, circ.sectors, circ.drs_zones],
+                        sort_keys=True, default=float).encode())
+    return h.hexdigest()[:12]
+
+
+def _read_manifest(store: Store, rpre: str) -> dict | None:
+    blob = store.get(f"{rpre}/manifest.json")
+    try:
+        return json.loads(blob) if blob else None
+    except ValueError:
+        return None
+
 # ----------------------------------------------------------------------------------- main pipeline
 def generate(season: int, rnd: int, store: Store, progress: Progress = _noop, force_circuit: bool = False,
-             cache_root: str | None = None) -> dict:
+             cache_root: str | None = None, force_race: bool = False) -> dict:
     t_begin = time.time()
     cache_root = cache_root or os.environ.get("F1SIM_CACHE", os.path.expanduser("~/.cache/f1sim"))
     progress("generating_fastf1", 0.02, f"Loading {season} round {rnd} from FastF1")
@@ -249,6 +279,17 @@ def generate(season: int, rnd: int, store: Store, progress: Progress = _noop, fo
         progress("enriching_osm", 1.0, f"{len(world.bld['height'])} buildings, {len(world.trees)} trees")
     del z_offset_total
 
+    # --- reuse the telemetry bundle when only the environment changed -----------------------------
+    line_hash = _line_hash(circ, racing_line)
+    rpre = race_prefix(season, rnd)
+    prev = None if force_race else _read_manifest(store, rpre)
+    if (prev and prev.get("schemaVersion", 1) == SCHEMA_VERSION and prev.get("pipelineVersion") == PIPELINE_VERSION
+            and prev.get("lineHash") == line_hash):
+        manifest = {**prev, "circuitVersion": CIRCUIT_VERSION, "circuit": f"{cpre}/"}
+        store.put(f"{rpre}/manifest.json", json.dumps(manifest, indent=1).encode(), "application/json", cache=SHORT)
+        progress("ready", 1.0, f"Telemetry unchanged — reused bundle, circuit/environment v{CIRCUIT_VERSION} only ({time.time() - t_begin:.0f}s)")
+        return manifest
+
     # --- race processing -------------------------------------------------------------------------
     progress("processing", 0.05, "Reconstructing car motion (Kalman fusion of position + speed)")
     mot = race_motion.reconstruct(raw, enu, circ, racing_line)
@@ -307,17 +348,18 @@ def generate(season: int, rnd: int, store: Store, progress: Progress = _noop, fo
         digest.update(name.encode())
         digest.update(files[name][0])
     bundle_id = f"b{PIPELINE_VERSION}-{digest.hexdigest()[:10]}"
-    rpre = race_prefix(season, rnd)
     progress("uploading", 0.2, f"Uploading {len(files)} files")
     for i, (name, (blob, ctype, gz)) in enumerate(sorted(files.items())):
         store.put(f"{rpre}/{bundle_id}/{name}", blob, ctype, gzip=gz)
         progress("uploading", 0.2 + 0.7 * (i + 1) / len(files), name)
     manifest = {
         "schema": BUNDLE_SCHEMA,
+        "schemaVersion": SCHEMA_VERSION,
         "season": season,
         "round": rnd,
         "pipelineVersion": PIPELINE_VERSION,
         "circuitVersion": CIRCUIT_VERSION,
+        "lineHash": line_hash,
         "bundle": f"{rpre}/{bundle_id}/",
         "circuit": f"{cpre}/",
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -403,7 +445,9 @@ def _race_json(raw, cfg, cpre, circ, drivers, evs, env, mot, chunks, tim, t_star
     ts_labels = {"1": "green", "2": "yellow", "4": "sc", "5": "red", "6": "vsc", "7": "vsc_ending"}
     return {
         "schema": BUNDLE_SCHEMA,
+        "schemaVersion": SCHEMA_VERSION,
         "pipelineVersion": PIPELINE_VERSION,
+        "circuitVersion": CIRCUIT_VERSION,
         "generatedAt": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "source": {"fastf1": fastf1.__version__, "session": "R"},
         "race": {
@@ -442,18 +486,36 @@ def _race_json(raw, cfg, cpre, circ, drivers, evs, env, mot, chunks, tim, t_star
     }
 
 
+def resolve_round(season: int, race: str, cache_root: str) -> int:
+    """`--race 16` or a name fragment (`monza`, `italy`, `silverstone`) -> round number."""
+    if race.isdigit():
+        return int(race)
+    import fastf1
+
+    fastf1_source.enable_cache(os.path.join(cache_root, "fastf1"))
+    return int(fastf1.get_event(season, race)["RoundNumber"])
+
+
 def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--season", type=int, required=True)
-    ap.add_argument("--round", type=int, required=True)
-    ap.add_argument("--out", default=None, help="local mirror directory")
-    ap.add_argument("--no-upload", action="store_true")
-    ap.add_argument("--force-circuit", action="store_true")
+    ap = argparse.ArgumentParser(
+        description="Generate one race locally. Writes JSON/bin artifacts to ./out and needs no credentials "
+                    "(FastF1 + OpenStreetMap + terrain tiles are public). Upload only happens with --upload.")
+    ap.add_argument("--year", "--season", dest="season", type=int, required=True)
+    ap.add_argument("--race", help="round number or name fragment, e.g. 16 or monza")
+    ap.add_argument("--round", type=int, help="round number (same as --race N)")
+    ap.add_argument("--out", default="out", help="local output directory (default ./out)")
+    ap.add_argument("--upload", action="store_true", help="also upload to R2 (needs R2_* env vars; CI only)")
+    ap.add_argument("--force-circuit", action="store_true", help="rebuild circuit + world even if present in --out")
+    ap.add_argument("--force-race", action="store_true", help="rebuild the telemetry bundle even if unchanged")
     a = ap.parse_args()
+    if a.round is None and not a.race:
+        ap.error("give --race (name or number) or --round")
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
     logging.getLogger("fastf1").setLevel(logging.WARNING)
-    store = Store(local_root=a.out, upload=not a.no_upload)
-    m = generate(a.season, a.round, store, force_circuit=a.force_circuit)
+    cache_root = os.environ.get("F1SIM_CACHE", os.path.expanduser("~/.cache/f1sim"))
+    rnd = a.round if a.round is not None else resolve_round(a.season, a.race, cache_root)
+    store = Store(local_root=a.out, upload=a.upload)
+    m = generate(a.season, rnd, store, force_circuit=a.force_circuit, force_race=a.force_race, cache_root=cache_root)
     print(json.dumps(m, indent=1))
 
 

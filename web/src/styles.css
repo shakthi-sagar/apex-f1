@@ -207,6 +207,8 @@ a { color: inherit; text-decoration: none; }
 
 .attrib { position: absolute; right: 16px; bottom: 2px; font-size: 9.5px; color: rgba(255,255,255,.35); pointer-events: auto; }
 .attrib a:hover { color: var(--text); }
+.data-note { position: absolute; top: 56px; left: 50%; transform: translateX(-50%); padding: 4px 12px; border-radius: 999px; font-size: 11px; background: rgba(0,0,0,.55); color: rgba(255,255,255,.8); pointer-events: auto; z-index: 5; }
+.data-note button { background: none; border: 0; padding: 0; color: inherit; text-decoration: underline; cursor: pointer; font: inherit; }
 .kbd { font-family: var(--mono); font-size: 10px; padding: 1px 5px; border-radius: 4px; border: 1px solid var(--line-hi); color: var(--dim); }
 
 /* compare / duel */
